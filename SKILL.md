@@ -347,7 +347,7 @@ kong_wang: 是否旬空 (true/false)
 
 > ⛔ **绝对约束**：六兽不能单独断吉凶，不得以六兽取象逆转前面的旺衰/动变结论。
 
-> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第五节（六兽吉凶象表）。如需精细类象 → 额外加载 `references/liuqin-liushen-leixiang.md` 六神类象部分。
+> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第五节（六兽吉凶象表）。如需精细类象 → 额外加载 `references/liuqin-liushen-leixiang.md` 六神类象部分。**若 intent 为「失物」「寻人」「天气」等需精确定位物品/人物的类别 → 必须额外加载 `references/bagua-leixiang.md` 和 `references/shier-dizhi-leixiang.md` 全文**，不得凭记忆取象。
 
 仅对用神和动爻做六兽修饰分析。
 
@@ -524,6 +524,7 @@ C. 16条原则检查：
 | 进入第四步 | `references/jie-gua-xiang-jie.md` | 第四节 |
 | 世应相刑/相害 | `references/di-zhi-relations.md` | 刑害判定 |
 | 进入第五步 | `references/jie-gua-xiang-jie.md` | 第五节 |
+| 进入第五步且 intent 为失物/寻人/天气 | `references/bagua-leixiang.md` + `references/shier-dizhi-leixiang.md` | 全文（八卦万物类象+地支类象，精确定位物品/人物不可省略） |
 | 进入第六步 | `references/jie-gua-xiang-jie.md` | 第六节 |
 | 高级应期（合处逢冲等） | `references/yingqi-faze.md` | 全部 |
 | 应期需地支合冲推算 | `references/di-zhi-relations.md` | 合冲速查 |
