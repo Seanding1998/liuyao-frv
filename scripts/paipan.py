@@ -794,8 +794,9 @@ class LiuYaoPaipan:
             is_dong = i in dong_set
 
             # 变爻（六亲按本卦宫重算，遵循传统本卦宫法）
+            # 无论是否动爻，只要存在变卦就计算变卦纳甲（非动爻也需要显示完整的变卦信息）
             bian_yao = None
-            if is_dong and bian_gua_arr is not None:
+            if bian_gua_arr is not None:
                 b_parsed = parse_line_str(bian_gua_arr[i])
                 if b_parsed:
                     b_di_zhi = b_parsed[1]
