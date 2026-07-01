@@ -260,17 +260,26 @@ def calc_ganzhi_pure(year, month, day, hour=0):
     hour_gz = f"{TIANGAN[hour_gan_idx]}{hour_zhi}"
 
     # 5. 旬空
+    # 日空
     cha = DIZHI_INDEX[ri_zhi] - TIANGAN_INDEX[ri_gan]
     if cha < 0:
         cha += 12  # 用地支周期 12 补正，非天干周期 10
     kw1 = KONGWANG_ZU[cha - 2]
     kw2 = KONGWANG_ZU[cha - 1]
 
+    # 月空（月柱旬空）
+    cha_m = DIZHI_INDEX[month_zhi] - TIANGAN_INDEX[month_gan]
+    if cha_m < 0:
+        cha_m += 12
+    mk1 = KONGWANG_ZU[cha_m - 2]
+    mk2 = KONGWANG_ZU[cha_m - 1]
+
     return {
         "year": year_gz, "month": month_gz, "day": day_gz, "hour": hour_gz,
         "month_branch": month_zhi,
         "ri_gan": ri_gan, "ri_zhi": ri_zhi,
         "xunkong": [kw1, kw2],
+        "yue_xunkong": [mk1, mk2],
     }
 
 
@@ -683,11 +692,20 @@ class LiuYaoPaipan:
                 cha += 12  # 用地支周期 12 补正，非天干周期 10
             xunkong = [KONGWANG_ZU[cha - 2], KONGWANG_ZU[cha - 1]]
 
+            # 月空
+            month_gan = month_gz[0]
+            month_zhi2 = month_gz[1]
+            cha_m = DIZHI_INDEX[month_zhi2] - TIANGAN_INDEX[month_gan]
+            if cha_m < 0:
+                cha_m += 12
+            yue_xunkong = [KONGWANG_ZU[cha_m - 2], KONGWANG_ZU[cha_m - 1]]
+
             return {
                 "year": year_gz, "month": month_gz, "day": day_gz, "hour": hour_gz,
                 "month_branch": month_gz[1],
                 "ri_gan": ri_gan, "ri_zhi": ri_zhi,
                 "xunkong": xunkong,
+                "yue_xunkong": yue_xunkong,
                 "backend": "sxtwl",
             }
         else:
@@ -765,7 +783,8 @@ class LiuYaoPaipan:
         cangyao_list = CANGYAO64.get(guastr, ["", "", "", "", "", ""])
 
         # 7. 旬空检查
-        xunkong_set = set(gz["xunkong"])
+        ri_xunkong_set = set(gz["xunkong"])
+        yue_xunkong_set = set(gz.get("yue_xunkong", []))
 
         # 7b. 本卦宫五行（用于变卦六亲按本卦宫重算）
         ben_gong_wuxing = _GONG_WUXING.get(main_gua_arr[10], "")
@@ -825,7 +844,12 @@ class LiuYaoPaipan:
                 }
 
             # 旬空
-            is_kong = di_zhi in xunkong_set
+            kong_parts = []
+            if di_zhi in ri_xunkong_set:
+                kong_parts.append("日空")
+            if di_zhi in yue_xunkong_set:
+                kong_parts.append("月空")
+            is_kong = "".join(kong_parts) if kong_parts else ""
 
             lines.append({
                 "pos": pos,
@@ -856,6 +880,7 @@ class LiuYaoPaipan:
             "month_branch": gz["month_branch"],
             "ri_chen": gz["ri_zhi"],
             "kong_wang": gz["xunkong"],
+            "yue_xunkong": gz.get("yue_xunkong", []),
             "question": subject,
             "intent": intent,
             "shensha": shensha_map,

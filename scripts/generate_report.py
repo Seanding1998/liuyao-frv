@@ -781,7 +781,12 @@ def main():
                     "dong": rl.get("dong", False),
                     "bian_di_zhi": rl["bian_yao"]["di_zhi"] if rl.get("bian_yao") else None,
                     "bian_liu_qin": rl["bian_yao"]["liu_qin"] if rl.get("bian_yao") else None,
-                    "special_tags": (["旬空"] if rl.get("kong_wang") else []) + (["月破"] if rl.get("yue_po") else []),
+                    "special_tags": (
+                        (["日空"] if "日空" in str(rl.get("kong_wang") or "") else [])
+                        + (["月空"] if "月空" in str(rl.get("kong_wang") or "") else [])
+                        + (["旬空"] if rl.get("kong_wang") and "日空" not in str(rl.get("kong_wang") or "") and "月空" not in str(rl.get("kong_wang") or "") else [])
+                        + (["月破"] if rl.get("yue_po") else [])
+                    ),
                 }
                 if rl.get("fu_shen"):
                     y["fu_shen"] = rl["fu_shen"]
@@ -807,7 +812,11 @@ def main():
                     "bian_gua": data["bian_gua"],
                     "yue_jian": data["month_branch"],
                     "ri_chen": data["ri_chen"],
-                    "kong_wang": "".join(data["kong_wang"]) if isinstance(data.get("kong_wang"), list) else data.get("kong_wang", ""),
+                    "kong_wang": (
+                        (("日空" + "".join(data["kong_wang"])) if isinstance(data.get("kong_wang"), list) else data.get("kong_wang", ""))
+                        + ((", 月空" + "".join(data["yue_xunkong"]))
+                           if isinstance(data.get("yue_xunkong"), list) and data["yue_xunkong"] else "")
+                    ),
                     "shensha": data.get("shensha", {}),
                 },
                 "yao": yao,
