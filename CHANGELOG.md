@@ -20,6 +20,34 @@
 
 ---
 
+## v1.5.2 (2026-07-01)
+
+### 修复 — `ben_yin_yang` 字段缺失导致卦象面板显示错误
+
+**问题**：HTML 报告中标题/信息条显示正确的卦名，但卦象面板（六爻符号 + 八卦符号）显示的是另一个卦。例如标题写「水山蹇」但面板画出「泽风大过」。
+
+**根因**：`paipan.py` 输出的 JSON 中每爻缺少 `ben_yin_yang`（本卦阴阳属性）字段，`generate_report.py` 被迫从 `ygua`（原始六爻编码）推算。当 AI 在解卦流程中手工修改 JSON 数据时若忘记同步 `ygua`，推算结果就与 `ben_gua` 不一致，导致卦象面板分裂。
+
+**修复方案**：
+- `scripts/paipan.py`：`lines.append` 新增 `ben_yin_yang` 字段，基于 `gua[i]`（与 `guastr`/`ben_gua` 严格绑定）
+- `scripts/generate_report.py`：扁平 JSON 适配器优先使用 paipan 直出的 `ben_yin_yang`，缺失时回退 `ygua` 推算（兼容旧 JSON）
+- `scripts/generate_report.py`：`build_gua_panels` 新增 `ben_gua_name` 参数，面板卦名使用 JSON meta 的 `ben_gua`，与标题/信息条完全一致
+
+### 修复 — 变卦非动爻缺少纳甲信息
+
+**问题**：六爻详表中「变卦」列对非动爻显示的是本卦的六亲和地支（fallback），而非变卦自身的纳甲。例如风雷益→天地否，非动爻在变卦列应显示「子孙巳」，却错误显示本卦的「兄弟寅」。
+
+**根因**：`paipan.py` 中 `bian_yao` 仅在 `is_dong` 为 `True` 时计算，非动爻的 `bian_yao` 为 `None`，导致 `generate_report.py` 用本卦数据作为 fallback。
+
+**修复方案**：
+- `scripts/paipan.py`：将条件从 `if is_dong and bian_gua_arr is not None` 改为 `if bian_gua_arr is not None`，只要存在变卦就为所有爻计算变卦纳甲（地支取自变卦结构，六亲按本卦宫五行重算）
+
+### 变更文件
+- `scripts/paipan.py`：新增 `ben_yin_yang` 字段（第 840 行）；bian_yao 计算扩展至全部爻（第 798 行）
+- `scripts/generate_report.py`：扁平适配优先取直出字段（第 789-797 行）；面板卦名参数化（第 155、184、708 行）
+
+---
+
 ## v1.5 (2026-06-08)
 
 ### 新增
