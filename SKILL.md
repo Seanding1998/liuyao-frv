@@ -135,16 +135,18 @@ kong_wang: 是否旬空 (true/false)
      根据用户选择：
      - 选 **A** → Agent 执行 `pip install sxtwl`，安装成功后进入步骤 5
      - 选 **B** → 直接进入步骤 5，脚本自动回退到纯 Python 计算
-5. **执行排盘**：调用脚本：
+5. **执行排盘**（文件模式，避免终端编码问题）：
    ```bash
-   python scripts/paipan.py --subject "用户的问题原文" --intent "确认后的intent"
+   python scripts/paipan.py --subject "用户的问题原文" --intent "确认后的intent" -o paipan_result.json
    ```
    脚本自动：
    - 三币摇卦法生成六爻（1=少阳 2=少阴 3=老阳 4=老阴）
    - 双轨四柱计算：sxtwl 已安装→精确到时辰；未安装→纯 Python 回退
    - 定主卦/变卦/世应/六神/六亲/伏神
-   - 输出完整 JSON 到 stdout（含 `"backend": "sxtwl"|"pure"` 标记）
-6. **读取并展示排盘结果**：Agent 解析脚本输出的 JSON，将卦象信息简要展示给用户（卦名、动爻、世应、计算后端），然后自动进入第一步。
+   - **输出完整 JSON 到文件** `paipan_result.json`（含 `"backend": "sxtwl"|"pure"` 标记）
+   - stderr 输出简短确认信息
+   > ⛔ 必须使用 `-o` 文件输出模式，**禁止**依赖 stdout 管道传递中文 JSON。
+6. **读取并展示排盘结果**：Agent 用 `read_file` 工具读取 `paipan_result.json`，解析 JSON 后将卦象信息简要展示给用户（卦名、动爻、世应、计算后端），然后自动进入第一步。
 
 **📤 强制输出**：
 
@@ -156,7 +158,7 @@ kong_wang: 是否旬空 (true/false)
 - sxtwl 检测：[已安装 / 未安装→用户选择A(安装) / 未安装→用户选择B(回退)]
 - 排盘命令：[完整命令]
 - 排盘结果摘要：本卦[名] 变卦[名] 世[世爻位]爻 应[应爻位]爻 动爻[N]个 计算后端=[sxtwl|pure]
-- JSON 数据路径：stdout（已解析为内存对象，记入下一步输入）
+- JSON 数据路径：`paipan_result.json`（通过 `read_file` 工具读取，已解析为内存对象）
 ```
 
 > 📁 落地：第一步创建目录后，将上述输出块补写入 `{卦例目录}/步骤0-自动排盘.md`（目录名依赖本步输出的 meta 信息，故建目录后补写）。

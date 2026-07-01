@@ -837,6 +837,7 @@ class LiuYaoPaipan:
                 "liu_shou": liu_shou,
                 "fu_shen": fu_shen,
                 "kong_wang": is_kong,
+                "ben_yin_yang": "阳" if gua[i] == "1" else "阴",
                 "shensha": [name for name, dzs in shensha_map.items() if di_zhi in dzs],
             })
 
@@ -901,6 +902,8 @@ def main():
     parser.add_argument("--day", type=int, default=None)
     parser.add_argument("--hour", type=int, default=None)
     parser.add_argument("--minute", type=int, default=0)
+    parser.add_argument("-o", "--output", default=None,
+                        help="输出 JSON 到文件（推荐，避免终端编码问题）")
     args = parser.parse_args()
 
     # 校验 intent
@@ -932,8 +935,13 @@ def main():
             data["meta"]["mode"] = "import"
         else:
             data["meta"] = {"question": args.subject, "intent": args.intent, "mode": "import"}
-        json.dump(data, sys.stdout, ensure_ascii=False, indent=2)
-        sys.stdout.write("\n")
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"✅ JSON 已写入: {args.output}", file=sys.stderr)
+        else:
+            json.dump(data, sys.stdout, ensure_ascii=False, indent=2)
+            sys.stdout.write("\n")
         return
 
     # 六爻编码
@@ -960,8 +968,13 @@ def main():
         data["mode"] = "manual"
 
     # 输出
-    json.dump(data, sys.stdout, ensure_ascii=False, indent=2)
-    sys.stdout.write("\n")
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"✅ JSON 已写入: {args.output}", file=sys.stderr)
+    else:
+        json.dump(data, sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
 
 
 if __name__ == "__main__":

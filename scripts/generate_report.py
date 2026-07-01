@@ -152,8 +152,9 @@ def di_zhi_to_wuxing(dz: str) -> str:
     return DI_ZHI_WUXING.get(dz, "?")
 
 
-def build_gua_panels(ben_lines, yao_list, bian_gua_name):
-    """构建三栏卦象面板 + 错卦综卦切换 HTML"""
+def build_gua_panels(ben_lines, yao_list, bian_gua_name, ben_gua_name=None):
+    """构建三栏卦象面板 + 错卦综卦切换 HTML。
+    ben_gua_name: JSON meta 中的 ben_gua，用于面板显示（与标题/信息条保持一致）"""
     has_dong = any(y.get("dong", False) for y in yao_list)
     bian_lines = compute_bian_lines(ben_lines, yao_list)
     hu_gua = compute_hu_gua(ben_lines)
@@ -181,7 +182,7 @@ def build_gua_panels(ben_lines, yao_list, bian_gua_name):
     # 本卦
     parts.append('<div class="gua-panel main">')
     parts.append(f'<div class="gua-panel-title">本卦</div>')
-    parts.append(f'<div class="gua-panel-name">{ben_name_from_lines}</div>')
+    parts.append(f'<div class="gua-panel-name">{ben_gua_name or ben_name_from_lines}</div>')
     parts.append(f'<div class="gua-panel-fu">{lines_to_fu_html(list(reversed(ben_lines)))}</div>')
     parts.append(f'<div class="gua-panel-trigram">{TRIGRAM_SYMBOL.get(ben_uname,"")}{TRIGRAM_SYMBOL.get(ben_lname,"")}</div>')
     parts.append('</div>')
@@ -705,7 +706,7 @@ def generate(data: dict, output_path: str) -> str:
     qualitative = s7["qualitative"]
     vcls = verdict_css_class(qualitative)
 
-    gua_panels_html = build_gua_panels(ben_lines, yao, meta.get("bian_gua") or "静卦")
+    gua_panels_html = build_gua_panels(ben_lines, yao, meta.get("bian_gua") or "静卦", meta.get("ben_gua", ""))
 
     # 自动检测特殊格局
     patterns = detect_patterns(ben_lines, yao, meta)
@@ -786,11 +787,15 @@ def main():
                     y["fu_shen"] = rl["fu_shen"]
                 if rl.get("shensha"):
                     y["shensha"] = rl["shensha"]
-                # 从 ygua 推算 ben_yin_yang
-                ygua = data.get("ygua", "")
-                if len(ygua) == 6:
-                    idx = rl["pos"] - 1
-                    y["ben_yin_yang"] = "阳" if ygua[idx] in ("1", "3") else "阴"
+                # ben_yin_yang：优先使用 paipan.py 直出字段（v1.5.1+），
+                # 缺失时回退到 ygua 推算以兼容旧 JSON
+                if rl.get("ben_yin_yang"):
+                    y["ben_yin_yang"] = rl["ben_yin_yang"]
+                else:
+                    ygua = data.get("ygua", "")
+                    if len(ygua) == 6:
+                        idx = rl["pos"] - 1
+                        y["ben_yin_yang"] = "阳" if ygua[idx] in ("1", "3") else "阴"
                 yao.append(y)
             data = {
                 "meta": {
@@ -981,4 +986,3 @@ if __name__ == "__main__":
 
 
 # ── 特殊格局自动检测 ────────────────────────────────────────
-

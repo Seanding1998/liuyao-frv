@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.5.1 (2026-06-25)
+
+### 修复 — 终端编码导致排盘 JSON 乱码
+
+**问题**：Windows PowerShell 中 `python paipan.py` 的 stdout 经过 Python（默认 GBK）→ PowerShell（UTF-8）双重编码转换后，中文全部变为乱码。此前 Agent 的做法是重新运行脚本（以 UTF-8 环境变量），但**重新运行会重新随机摇卦**，导致初筮之卦丢失——这是方法论错误。
+
+**根因**：非终端问题，而是 Python 在 Windows 上未设 `PYTHONIOENCODING` 时默认走系统 locale（中文 GBK），与 PowerShell 的 UTF-8 编码打架。
+
+**修复方案**（换终端不如绕过管道）：
+- `scripts/paipan.py` 新增 `-o / --output` 参数：直接将 JSON 写入 UTF-8 文件，完全绕过 stdout 管道
+- 文件模式下 stderr 输出简短确认信息，stdout 无中文
+- SKILL.md 第零步第 5-6 条更新：**强制使用 `-o paipan_result.json` 文件模式**，然后用 `read_file` 工具读取（不经过 shell 管道）
+- 新增 ⛔ 硬性规定：禁止依赖 stdout 传递中文 JSON
+
+### 变更文件
+- `scripts/paipan.py`：新增 `-o/--output` 参数（第 904 行、第 937-940 行、第 970-975 行）
+- `SKILL.md`：第零步第 5-6 条重写，强制输出路径描述更新
+
+---
+
 ## v1.5 (2026-06-08)
 
 ### 新增
