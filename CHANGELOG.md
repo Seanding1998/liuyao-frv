@@ -1,5 +1,57 @@
 # Changelog
 
+## v1.5.7 (2026-07-09)
+
+### 改进 — 排盘正确性、可复现性、流程重构
+
+**修复 1 — 六兽代码注释与实际逻辑矛盾**（`paipan.py` 第 829-831 行）
+- 旧注释「自上而下排列：上爻(i=5)→初爻(i=0)」与代码 `(start + i) % 6` 实际的「自下而上」赋值方向矛盾，按注释"修正"会把六兽全排反
+- 新注释明确写出日干→起始六兽映射 + 自下而上排列规则
+
+**新增 — 摇卦 seed 可复现性**
+- `paipan.py` 新增 `--seed N` 参数：指定后随机序列固定，同 seed 两次运行产出完全相同的 ygua
+- JSON 顶层新增 `seed: int|null` 字段，便于事后复核"那天那个卦怎么排出来的"
+- 占卜传统讲究"初筮告，再三渎"——seed 不改初筮随机性，但使卦象可追溯
+
+**新增 — 特殊格局自动检测收敛到 `paipan.py`**
+- 新增 `detect_patterns()` 函数 + 地支关系常量（六合/六冲/三会局对）
+- JSON 新增 `patterns` 字段：`sanhui_ju` / `dizhi_liuhe` / `dizhi_liuchong` / `fuyin_positions` / `fanyin_positions` / `dufa` / `dujing` / `ben_liuchong_gua` / `ben_liuhe_gua` / `dong_count`
+- SKILL.md 第三步从「AI 手动识别格局」改为「直接读 JSON patterns 字段」——单一权威，杜绝两套逻辑打架
+- SKILL.md 全局铁律新增第 13 条「格局检测单一权威」
+
+**新增 — `generate_report.py --validate` 子命令**
+- 校验逻辑从 SKILL.md 的 inline Python heredoc 收敛到 `generate_report.py --validate`
+- 检查 `meta`/`yao`/`steps` 顶层域 + `step1`~`step8` 齐全 + `step5` 四个六兽字段 + 每爻 `ben_yin_yang`
+- SKILL.md 第九步用 `python generate_report.py -i xxx.json --validate` 替代 heredoc——跨平台引号转义风险消除，schema 演进只需改一处
+
+**改进 — 第零步交互轮次合并**
+- 旧流程：问事 → 确认意图 → 检测 sxtwl → 问 A/B 选择 → 执行（3-4 轮 round-trip）
+- 新流程：问事 → 同时呈现「意图确认 + sxtwl A/B 选择」→ 执行（2 轮）
+- sxtwl 未安装时 ⚠️ **显眼标注**「B 纯 Python 回退仅支持 2026-2086 年」
+- 纯 Python 年份越界的报错信息补充「请安装 sxtwl」提示
+
+**改进 — 版本号与文档一致性**
+- SKILL.md frontmatter `version: "1.5.0"` → `"1.5.7"`（修复 1.5.1-1.5.6 对外不可见的 bug）
+- 流程标题「解卦流程（九步法）」→「解卦流程（十步法：第零步排盘 + 第一至九步解卦）」
+- README 版本节更新
+- CHANGELOG v1.5.3/4/5 重排为严格倒序
+
+**改进 — 桌面路径回退不污染主目录**
+- 旧回退：Linux 无 Desktop 时 → `~/`（卦例目录散落 home 根）
+- 新回退：→ `~/.liuyao/cases/`（自动创建，隔离存放）
+
+**改进 — 第八步内联 16 条原则速查表**
+- 核心契约从 `references/jie-gua-xiang-jie.md` 第一节内联到 SKILL.md 第八步
+- 校验时无需额外加载即可对照，减少 Agent 凭记忆偷懒的可能
+
+### 变更文件
+- `scripts/paipan.py`：六兽注释修正；新增 `DIZHI_LIUHE_PAIRS` / `DIZHI_LIUCHONG_PAIRS` / `DIZHI_SANHUI_GROUPS` 常量；新增 `detect_patterns()` 函数；`build_paipan_data` 签名加 `seed` 参数；JSON 输出加 `patterns` 和 `seed` 字段；CLI 新增 `--seed` 参数；年份越界报错信息增强
+- `scripts/generate_report.py`：新增 `validate_json()` 函数 + `--validate` 子命令；CLI 版本号 v1.4 → v1.5
+- `SKILL.md`：frontmatter 版本号更新；角色定义与流程标题统一为十步法；全局铁律新增第 13 条；第零步交互合并 + sxtwl 警示 + seed 文档 + patterns 输出要求；第三步改为读 JSON patterns；强制触发条件表更新；第八步内联 16 条原则速查表；第九步用 `--validate` 替代 heredoc；桌面路径回退改为 `~/.liuyao/cases/`
+- `README.md`：版本节更新为 v1.5.7
+
+---
+
 ## v1.5.6 (2026-07-08)
 
 ### 改进 — 第零步文件管理重构 + 跨平台兼容
@@ -19,23 +71,18 @@
 
 ---
 
-## v1.5.3 (2026-06-25)
+## v1.5.5 (2026-07-01)
 
-### 修复 — 终端编码导致排盘 JSON 乱码
+### 修复 — 第五步取象遗漏八卦/地支类象文件
 
-**问题**：Windows PowerShell 中 `python paipan.py` 的 stdout 经过 Python（默认 GBK）→ PowerShell（UTF-8）双重编码转换后，中文全部变为乱码。此前 Agent 的做法是重新运行脚本（以 UTF-8 环境变量），但**重新运行会重新随机摇卦**，导致初筮之卦丢失——这是方法论错误。
+**问题**：SKILL.md 将 bagua-leixiang.md（八卦万物类象）和 shier-dizhi-leixiang.md（十二地支类象）列在「按需加载」中。对于「失物」「寻人」「天气」等需要精确定位物品/人物类别的 intent，Agent 进入第五步取象时未加载这两个文件，凭记忆取象导致偏差。例如寻物卦中，离卦「中虚」（空腔容器）、辰土「盆坛」（罐形器皿）、午火「食物」三条类象均在文件中明列，但因未加载而遗漏，最终将空饮料罐误判为手机。
 
-**根因**：非终端问题，而是 Python 在 Windows 上未设 `PYTHONIOENCODING` 时默认走系统 locale（中文 GBK），与 PowerShell 的 UTF-8 编码打架。
-
-**修复方案**（换终端不如绕过管道）：
-- `scripts/paipan.py` 新增 `-o / --output` 参数：直接将 JSON 写入 UTF-8 文件，完全绕过 stdout 管道
-- 文件模式下 stderr 输出简短确认信息，stdout 无中文
-- SKILL.md 第零步第 5-6 条更新：**强制使用 `-o paipan_result.json` 文件模式**，然后用 `read_file` 工具读取（不经过 shell 管道）
-- 新增 ⛔ 硬性规定：禁止依赖 stdout 传递中文 JSON
+**修复方案**：
+- SKILL.md 第五步强制加载规则新增：若 intent 为「失物」「寻人」「天气」等需精确定位物品/人物的类别 → 必须额外加载 references/bagua-leixiang.md 和 references/shier-dizhi-leixiang.md 全文，不得凭记忆取象
+- 强制触发条件表新增一行：进入第五步且 intent 为失物/寻人/天气 → bagua-leixiang.md + shier-dizhi-leixiang.md（全文）
 
 ### 变更文件
-- `scripts/paipan.py`：新增 `-o/--output` 参数（第 904 行、第 937-940 行、第 970-975 行）
-- `SKILL.md`：第零步第 5-6 条重写，强制输出路径描述更新
+- SKILL.md：第五步强制加载规则（第 350 行）+ 强制触发条件表（第 527 行）
 
 ---
 
@@ -67,20 +114,25 @@
 
 ---
 
+## v1.5.3 (2026-06-25)
 
-## v1.5.5 (2026-07-01)
+### 修复 — 终端编码导致排盘 JSON 乱码
 
-### 修复 — 第五步取象遗漏八卦/地支类象文件
+**问题**：Windows PowerShell 中 `python paipan.py` 的 stdout 经过 Python（默认 GBK）→ PowerShell（UTF-8）双重编码转换后，中文全部变为乱码。此前 Agent 的做法是重新运行脚本（以 UTF-8 环境变量），但**重新运行会重新随机摇卦**，导致初筮之卦丢失——这是方法论错误。
 
-**问题**：SKILL.md 将 bagua-leixiang.md（八卦万物类象）和 shier-dizhi-leixiang.md（十二地支类象）列在「按需加载」中。对于「失物」「寻人」「天气」等需要精确定位物品/人物类别的 intent，Agent 进入第五步取象时未加载这两个文件，凭记忆取象导致偏差。例如寻物卦中，离卦「中虚」（空腔容器）、辰土「盆坛」（罐形器皿）、午火「食物」三条类象均在文件中明列，但因未加载而遗漏，最终将空饮料罐误判为手机。
+**根因**：非终端问题，而是 Python 在 Windows 上未设 `PYTHONIOENCODING` 时默认走系统 locale（中文 GBK），与 PowerShell 的 UTF-8 编码打架。
 
-**修复方案**：
-- SKILL.md 第五步强制加载规则新增：若 intent 为「失物」「寻人」「天气」等需精确定位物品/人物的类别 → 必须额外加载 references/bagua-leixiang.md 和 references/shier-dizhi-leixiang.md 全文，不得凭记忆取象
-- 强制触发条件表新增一行：进入第五步且 intent 为失物/寻人/天气 → bagua-leixiang.md + shier-dizhi-leixiang.md（全文）
+**修复方案**（换终端不如绕过管道）：
+- `scripts/paipan.py` 新增 `-o / --output` 参数：直接将 JSON 写入 UTF-8 文件，完全绕过 stdout 管道
+- 文件模式下 stderr 输出简短确认信息，stdout 无中文
+- SKILL.md 第零步第 5-6 条更新：**强制使用 `-o paipan_result.json` 文件模式**，然后用 `read_file` 工具读取（不经过 shell 管道）
+- 新增 ⛔ 硬性规定：禁止依赖 stdout 传递中文 JSON
 
 ### 变更文件
-- SKILL.md：第五步强制加载规则（第 350 行）+ 强制触发条件表（第 527 行）
+- `scripts/paipan.py`：新增 `-o/--output` 参数（第 904 行、第 937-940 行、第 970-975 行）
+- `SKILL.md`：第零步第 5-6 条重写，强制输出路径描述更新
 
+---
 
 ## v1.5 (2026-06-08)
 
@@ -150,7 +202,6 @@
 
 **维护**：
 - `html-report-guide.md` 标注脚本版本 v1.4
-- `.deepseek` / `.claude` / `.codex` 三目录 `generate_report.py` 同步
 
 ### v1.5 后续补丁 — JSON 数据录入防错（2026-06-09）
 
@@ -202,7 +253,6 @@
 ### 维护
 - `dong-bian-fa-ze.md` 全部标题重编号（五→六→…→十）
 - `jie-gua-xiang-jie.md` 两处交叉引用更新（第八节→第九节）
-- `.claude` 与 `.deepseek` 双目录同步
 
 ---
 

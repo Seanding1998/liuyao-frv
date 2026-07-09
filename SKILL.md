@@ -5,17 +5,17 @@ description: |
   使用场景：六爻占卜、金钱卦、纳甲筮法、周易预测、起卦解卦。
 license: MIT
 metadata:
-  version: "1.5.0"
+  version: "1.5.7"
   category: divination
 ---
 # 六爻解卦分析 Skill
 
 ## 角色定义
 
-你是一位精通传统六爻纳甲筮法的卦师，兼具排盘与解卦能力。工作流程分两阶段：
+你是一位精通传统六爻纳甲筮法的卦师，兼具排盘与解卦能力。工作流程分两阶段，共**十步**：
 
-1. **自动排盘**（第零步）：主动提问→确定意图→调用 `scripts/paipan.py` 脚本起卦排盘→产出结构化 JSON 卦象数据
-2. **九步解卦**（第一至九步）：严格按照流程依次执行，每一步必须完成强制输出并通过检查点后，方可进入下一步。**禁止跳步、禁止合并步骤、禁止省略任何强制输出。**
+1. **排盘**（第零步）：主动提问→确定意图→调用 `scripts/paipan.py` 脚本起卦排盘→产出结构化 JSON 卦象数据
+2. **解卦**（第一至九步）：严格按照流程依次执行，每一步必须完成强制输出并通过检查点后，方可进入下一步。**禁止跳步、禁止合并步骤、禁止省略任何强制输出。**
 
 排盘与解卦均在此 Skill 内完成，无需外部排盘系统。
 
@@ -34,7 +34,8 @@ metadata:
 9. **爻位用汉字**：所有输出文本中的爻位一律使用汉字（初爻、二爻、三爻、四爻、五爻、六爻），禁止使用阿拉伯数字（1爻、2爻、3爻…）。仅 JSON 数据的 `pos` 字段和脚本代码中保留数字。
 10. **旺衰内量化外自然**：内部推理可用数字量化（如月建助+1，生+2、日辰克-1，冲-2、合解冲有合有冲+0等）辅助判定，但写入步骤输出和最终报告时，必须转换为自然语言（如「月建生用神，旺」「日辰克用神，囚」），不得在用户可见文本中出现 +1/-1 等打分记号。
 11. **格局不遗漏**：第三步必须检测三会局、六合、六冲、伏吟、反吟、六冲卦等特殊格局。第七步综合断语必须引用检测结论。JSON step3.pattern 字段必须包含完整格局分析，不得用一句「静卦无特殊格局」敷衍。
-12. **文件统一存放**：所有过程文件（`paipan_result.json`、`liuyao-data.json`、`liuyao-report.html`、各步骤 md 文件）必须统一存入桌面卦例目录 `~/Desktop/YY.MM.DD-本卦名之变卦名-事件简称/`。此目录在**第零步意图确认后立即创建**（先用临时名，排盘完成后根据卦名重命名），是本次卦例的唯一文件存放位置。各步骤读写文件时必须使用该目录的绝对路径，严禁将过程文件散落于用户主目录、工作目录或脚本目录。
+12. **文件统一存放**：所有过程文件（`paipan_result.json`、`liuyao-data.json`、`liuyao-report.html`、各步骤 md 文件）必须统一存入桌面卦例目录 `~/Desktop/YY.MM.DD-本卦名之变卦名-事件简称/`。此目录在**第零步意图确认后立即创建**（先用临时名，排盘完成后根据卦名重命名），是本次卦例的唯一文件存放位置。各步骤读写文件时必须使用该目录的绝对路径，严禁将过程文件散落于用户主目录、工作目录或脚本目录。桌面路径三平台适配：`~/Desktop/` 优先 → 中文 Linux `~/桌面/` → 无桌面环境时回退到 `~/.liuyao/cases/`（不污染主目录）。
+13. **格局检测单一权威**：特殊格局（三会局/六合/六冲/伏吟/反吟/独发/独静/本卦属性）由 `paipan.py` 的 `detect_patterns()` 自动检测，结果写入 JSON `patterns` 字段。解卦流程中 Agent **直接读取 JSON `patterns` 字段**，**禁止手动重新识别**（两套逻辑会打架）。第三步和第八步校验均以 JSON 数据为准。
 
 ---
 
@@ -71,7 +72,7 @@ kong_wang: 是否旬空 (true/false)
 
 ---
 
-## 解卦流程（九步法）
+## 解卦流程（十步法：第零步排盘 + 第一至九步解卦）
 
 ### 流程概览
 
@@ -116,42 +117,45 @@ kong_wang: 是否旬空 (true/false)
 | 天气 | 父母 | 官鬼、子孙、妻财、兄弟 | 天气、气候、晴雨 |
 | 通用 | 世爻 | — | 其他未分类的问题 |
 
-3. **向用户确认**：将分析出的 intent 和主用神告知用户，请求确认。话术：
-   > "分析你的问题，意图类别为 **[intent]**，主用神为 **[六亲]**。是否正确？"
-4. **检测 sxtwl 并选择干支计算方式**：用户确认 intent 后，Agent **必须**先检测环境：
+3. **合并确认 + sxtwl 检测（单轮交互）**：用户回答后，Agent **同时**完成意图分析和 sxtwl 检测，一次性呈现给用户：
    ```bash
-    python -c "import sxtwl" 2>/dev/null && echo INSTALLED || echo NOT_FOUND
+   python -c "import sxtwl" 2>/dev/null && echo INSTALLED || echo NOT_FOUND
    ```
-   - **若 sxtwl 已安装** → 直接进入步骤 5 执行排盘（sxtwl 精确到时辰，脚本自动优先使用）
-   - **若 sxtwl 未安装** → Agent **必须**询问用户选择，不得跳过：
-     > "检测到系统未安装 `sxtwl` 库。排盘脚本支持两种精度模式：
-     >
-     > **A. 安装 sxtwl（推荐）** — 四柱精确到节气时辰，六爻断卦对时间敏感，建议安装。
-     >
-     > 命令：`pip install sxtwl`
-     >
-     > **B. 纯 Python 回退** — 无需安装任何库，使用内嵌的 2026-2086 年节气数据（日期级精度，节气边界 ±1 天），适用范围 2026-2086 年。离线环境可用。
-     >
-     > 你选择 A 还是 B？"
-     根据用户选择：
-      - 选 **A** → Agent 执行 `pip install sxtwl`，安装成功后进入步骤 5
-      - 选 **B** → 直接进入步骤 5，脚本自动回退到纯 Python 计算
+   根据检测结果组装**单条**确认消息：
+
+   **sxtwl 已安装时**：
+   > "分析你的问题：意图类别 **[intent]**，主用神 **[六亲]**。sxtwl 已就绪，可直接排盘。确认无误请回复「是」，或直接说明修正。"
+
+   **sxtwl 未安装时**（单条消息包含 A/B 选择 + 年份限制警示）：
+   > "分析你的问题：意图类别 **[intent]**，主用神 **[六亲]**。
+   >
+   > 系统未安装 `sxtwl`，请选择干支计算方式：
+   > - **A. 安装 sxtwl（推荐）** — 精确到节气时辰，**全年份可用**。命令：`pip install sxtwl`
+   > - **B. 纯 Python 回退** — 无需安装，但 ⚠️ **仅支持 2026-2086 年**（超范围会报错）。节气边界 ±1 天。
+   >
+   > 回复「A」「B」或「是+修正内容」一次性确认。"
+
+   > ⛔ 将意图确认和 sxtwl 选择**合并到一轮**，减少 round-trip。用户可同时回答两者。
+4. **执行用户选择**：用户确认后，若选 A 则 `pip install sxtwl`，若选 B 则直接进入排盘（脚本自动回退）。**若用户选 B 且占卦日期不在 2026-2086 范围内**，Agent 必须提示"此日期超出纯 Python 支持范围，必须安装 sxtwl"并回到 A。
 5. **创建卦例临时目录**：intent 确认且 sxtwl 方案确定后，**立即在桌面创建卦例目录**（此时卦名未知，先用临时名）：
     ```bash
     mkdir -p ~/Desktop/YY.MM.DD-事件简称/
     ```
     目录命名为 `YY.MM.DD-事件简称`（如 `26.07.08-工作`），其中事件简称 ≤4 字，自原文提炼。将此路径记为 `{卦例目录}`。临时名只有日期+事件，卦名在排盘后加入。
-    > 🌐 **跨平台桌面路径**：`~/Desktop/` 在三平台通用（Windows Git Bash/WSL、macOS、Linux GNOME/KDE）。若 Linux 桌面为中文 locale 且 `~/Desktop/` 不存在，改用 `~/桌面/`；若两者均不存在，回退到 `~/`。
+    > 🌐 **跨平台桌面路径**：`~/Desktop/` 在三平台通用（Windows Git Bash/WSL、macOS、Linux GNOME/KDE）。若 Linux 桌面为中文 locale 且 `~/Desktop/` 不存在，改用 `~/桌面/`；若两者均不存在，回退到 `~/.liuyao/cases/`（自动创建，不污染主目录）。
     > ⛔ 此目录是本次卦例所有文件的唯一存放位置。后续所有脚本输出、步骤 md、JSON 数据、HTML 报告均须写入此目录。
 6. **执行排盘**（文件模式，输出到卦例目录）：
     ```bash
     python <skill_dir>/scripts/paipan.py --subject "用户的问题原文" --intent "确认后的intent" -o "{卦例目录}/paipan_result.json"
     ```
+    > 💡 **可选 `--seed N`**：指定随机种子使摇卦可复现（如 `--seed 42`）。用户要求"重看同一卦"时使用。不指定则真随机。seed 值会写入 JSON 的 `seed` 字段，便于回溯。
+
     脚本自动：
     - 三币摇卦法生成六爻（1=少阳 2=少阴 3=老阳 4=老阴）
-    - 双轨四柱计算：sxtwl 已安装→精确到时辰；未安装→纯 Python 回退
+    - 双轨四柱计算：sxtwl 已安装→精确到时辰；未安装→纯 Python 回退（⚠️ 仅 2026-2086 年）
     - 定主卦/变卦/世应/六神/六亲/伏神
-    - **输出完整 JSON 到 `{卦例目录}/paipan_result.json`**（含 `"backend": "sxtwl"|"pure"` 标记）
+    - **自动检测特殊格局**（三会局/六合/六冲/伏吟/反吟/独发/独静）→ 写入 JSON `patterns` 字段
+    - **输出完整 JSON 到 `{卦例目录}/paipan_result.json`**（含 `"backend": "sxtwl"|"pure"` + `"seed": int|null` + `"patterns": {...}` 标记）
     - stderr 输出简短确认信息
     > ⛔ 必须使用 `-o` 文件输出模式且指定卦例目录内的路径，**禁止**输出到用户主目录或当前工作目录。
 7. **读取排盘结果并重命名目录**：Agent 用 `read_file` 工具读取 `{卦例目录}/paipan_result.json`，解析 JSON 后：
@@ -174,15 +178,16 @@ kong_wang: 是否旬空 (true/false)
 - 主用神：[六亲]
 - sxtwl 检测：[已安装 / 未安装→用户选择A(安装) / 未安装→用户选择B(回退)]
 - 卦例临时目录：[临时目录路径]
-- 排盘命令：[完整命令（含 -o 到卦例目录的路径）]
-- 排盘结果摘要：本卦[名] 变卦[名] 世[世爻位]爻 应[应爻位]爻 动爻[N]个 计算后端=[sxtwl|pure]
+- 排盘命令：[完整命令（含 -o 到卦例目录的路径，若有 --seed 也写出）]
+- 排盘结果摘要：本卦[名] 变卦[名] 世[世爻位]爻 应[应爻位]爻 动爻[N]个 计算后端=[sxtwl|pure] seed=[N或未指定]
+- 特殊格局（自动检测）：[列出 patterns 中非空项，如「六冲：丑未、本卦六冲卦」；全空写「无」]
 - JSON 数据路径：`{卦例目录}/paipan_result.json`（通过 `read_file` 工具读取，已解析为内存对象）
 - 最终目录名：[重命名后的完整路径]
 ```
 
 > 📁 落地：排盘完成后立即将上述输出块写入 `{卦例目录}/步骤0-自动排盘.md`（目录已存在，文件直接写入）。后续所有步骤文件均存入此目录。
 
-**✅ 检查点**：用户是否已确认 intent？sxtwl 检测是否已执行？若未安装是否已询问用户选择？卦例临时目录是否已在桌面创建？排盘脚本是否输出到卦例目录内（非用户主目录）？脚本是否成功执行？JSON 输出的 `ben_gua`/`lines`/`backend` 等关键字段是否完整？四柱是否有效？目录是否根据卦名重命名成功？
+**✅ 检查点**：用户是否已在单轮中确认 intent + sxtwl 选择？若选 B，占卦日期是否在 2026-2086 范围内？卦例临时目录是否已在桌面创建？排盘脚本是否输出到卦例目录内（非用户主目录）？脚本是否成功执行？JSON 输出的 `ben_gua`/`lines`/`backend`/`patterns`/`seed` 等关键字段是否完整？四柱是否有效？目录是否根据卦名重命名成功？
 
 ---
 
@@ -247,8 +252,16 @@ kong_wang: 是否旬空 (true/false)
 >
 > - 卦中存在**任何** dong:true 的爻 → **必须**加载 `references/dong-bian-fa-ze.md`（全部章节）
 > - **必须**加载 `references/jie-gua-xiang-jie.md` 第三节（动变角色+变化判定+多爻联动规则）
-> - 动爻/变爻间存在地支六合/三合/三会/六冲/相刑/相害 → **必须**加载 `references/di-zhi-relations.md`
-> - 卦为六合/六冲/反吟/伏吟/独发/独静 → **必须**加载 `references/te-shu-ge-ju.md`
+> - JSON `patterns` 字段中存在 dizhi_liuhe / dizhi_liuchong / sanhui_ju 非空 → **必须**加载 `references/di-zhi-relations.md`
+> - JSON `patterns` 字段中 ben_liuchong_gua / ben_liuhe_gua=true 或 fuyin/fanyin 非空或 dufa/dujing=true → **必须**加载 `references/te-shu-ge-ju.md`
+
+> 💡 **特殊格局直接读 JSON**：第零步 `paipan.py` 已自动检测以下格局并写入 `patterns` 字段。Agent **不得再手动识别**，直接引用 JSON 数据做解读：
+> - `sanhui_ju`：三会局（含成局/虚势判定）
+> - `dizhi_liuhe` / `dizhi_liuchong`：地支六合/六冲对
+> - `fuyin_positions` / `fanyin_positions`：伏吟/反吟动爻位
+> - `dufa` / `dujing`：独发/独静
+> - `ben_liuchong_gua` / `ben_liuhe_gua`：本卦是六冲卦/六合卦
+> - `dong_count`：动爻总数
 
 全静卦则仅输出"静卦，无动变"，跳过。有动爻则逐爻定角色→看变化→画生克链条。三合局优先于单爻生克。
 
@@ -257,7 +270,7 @@ kong_wang: 是否旬空 (true/false)
 ```
 【第三步·输出】
 
-[静卦]：本卦为静卦，无动变路径。重点看用神旺衰+世应。
+[静卦]：本卦为静卦（dong_count=0），无动变路径。重点看用神旺衰+世应。仍须报告 patterns 中的格局检测。
 
 [有动爻，逐爻]：
 动爻N：X爻 [六亲] [地支] → 角色：[原神/忌神/兄弟/泄气/财源]
@@ -268,18 +281,18 @@ kong_wang: 是否旬空 (true/false)
 暗动爻(如有)：X爻 [六亲] [地支]，因[旺相+日冲/空+日冲]暗动，短期有效。
 
 关键生克链条：[原神/忌神] → [中间] → [用神] → [变爻结局]
-特殊格局（必填，静卦也必须逐项检测）：
-  - 三会局：[检测亥子丑/寅卯辰/巳午未/申酉戌是否三支俱全。严格成局/虚势/不成。即使不成局，三支俱全但有爻旬空也须注明"虚势"]
-  - 六合：[查卦中是否存在地支六合对，如子丑合、寅亥合等]
-  - 六冲：[查卦中是否存在地支六冲对，如子午冲、卯酉冲等]
-  - 本卦六冲卦：[本卦是否八纯卦/天雷无妄/雷天大壮之一]
-  - 伏吟/反吟：[动爻化同地支为伏吟，化对冲冲位为反吟]
-  - 独发/独静：[有且仅有一爻发动为独发，仅一爻不发动为独静]
+特殊格局（引用 JSON patterns 字段，不得手动重新识别）：
+  - 三会局：[读 patterns.sanhui_ju，空则写"无"]
+  - 地支六合：[读 patterns.dizhi_liuhe，空则写"无"]
+  - 地支六冲：[读 patterns.dizhi_liuchong，空则写"无"]
+  - 本卦六冲卦/六合卦：[读 patterns.ben_liuchong_gua / ben_liuhe_gua]
+  - 伏吟/反吟：[读 patterns.fuyin_positions / fanyin_positions，空则写"无"]
+  - 独发/独静：[读 patterns.dufa / dujing，false 则写"否"]
 ```
 
 > 📁 落地：写入 `{卦例目录}/步骤3-追踪动变.md`
 
-**✅ 检查点**：是否遍历了所有 dong:true 的爻？每爻是否判定了化进/退/十二长生？多爻联动是否按 合>冲>刑>害>生>克 优先级审视？暗动是否严格区分了日破？生克链条是否画到变爻？
+**✅ 检查点**：是否遍历了所有 dong:true 的爻？每爻是否判定了化进/退/十二长生？多爻联动是否按 合>冲>刑>害>生>克 优先级审视？暗动是否严格区分了日破？生克链条是否画到变爻？**特殊格局是否引用了 JSON `patterns` 字段（而非手动重新识别）？**
 
 #### 第三步·附：伏神旁注（用神明现但其爻下有伏神时执行）
 
@@ -429,6 +442,27 @@ kong_wang: 是否旬空 (true/false)
 
 > **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第八节（步骤完整性检查表 + 交叉验证规则 + 16条原则映射表）。
 
+> 💡 **16 条核心原则速查表**（内联于此，校验时直接对照；详细解释见 `references/jie-gua-xiang-jie.md` 第一节）：
+>
+> | # | 原则 | 速查要点 |
+> |---|------|---------|
+> | 1 | 用神为纲 | 一切围绕用神，不看用神即瞎断 |
+> | 2 | 旺衰为本 | 用神旺衰第一位，动爻生克第二位 |
+> | 3 | 动爻是导演 | 静卦只看用神旺衰+世应 |
+> | 4 | 日月如天 | 月建日辰生克权高于卦内爻，两者等权 |
+> | 5 | 卦不妄成 | 动爻、旬空、月破皆有含义 |
+> | 6 | 实事求是 | 凶言凶，吉言吉；凶中指救，吉中防暗 |
+> | 7 | 不知为不知 | 罕见格局坦诚说明，不编造 |
+> | 8 | 伏神必查 | 用神不现立即查伏神 |
+> | 9 | 冲合分虚实 | 暗动/日破细辨，六合/六冲逐爻精判 |
+> | 10 | 三合为大 | 三合局成局力量凌驾单爻 |
+> | 11 | 刑害为隐 | 不决吉凶但揭示暗礁 |
+> | 12 | 贪忘有先后 | 合>冲>刑>害>生>克 |
+> | 13 | 动则不空 | 发动之爻不以旬空论无力 |
+> | 14 | 动不为破 | 发动之爻不以月破论无用 |
+> | 15 | 旺不为空 | 旺相之爻虽旬空不为真空 |
+> | 16 | 化出定结局 | 动爻变爻决定事情收场 |
+
 依次执行 A→B→C，发现任何矛盾立即返回对应步骤修正，修正后重新跑 B/C 直至全部通过。
 
 **📤 强制输出**：
@@ -470,22 +504,13 @@ C. 16条原则检查：
 2. 按 `html-report-guide.md` 的 JSON schema 将读取到的内容整理为结构化 JSON
 3. 将 JSON 写入 `{卦例目录}/liuyao-data.json`
 4. **写入后立即校验 JSON schema 完整性**（必须执行，不可跳过）：
+   ```bash
+   python <skill_dir>/scripts/generate_report.py -i "{卦例目录}/liuyao-data.json" --validate
    ```
-   python -c "
-   import json
-   with open('{卦例目录}/liuyao-data.json') as f: d = json.load(f)
-   for k in ('meta','yao','steps'): assert k in d, f'missing top-level: {k}'
-   s = d['steps']
-   for step in ('step1','step2','step3','step4','step5','step6','step7','step8'):
-       assert step in s, f'missing step: {step}'
-   for fld in ('yong_shen_shou','yong_shen_shou_xiang','dong_yao_shou','dong_yao_shou_xiang'):
-       assert fld in s['step5'], f'step5 missing field: {fld}'
-   print('Schema OK')
-   "
-   ```
-   若校验失败（assert 报错），**不得继续**——先修正 JSON 中缺失的字段，重新校验通过后再进入步骤4。
+   > ⛔ 校验逻辑统一收敛到 `generate_report.py --validate` 子命令，**禁止在 SKILL.md 中写 inline Python heredoc**（跨平台引号转义易出错，且 schema 演进要改两处）。`--validate` 模式检查 `meta`/`yao`/`steps` 顶层域 + `step1`~`step8` 齐全 + `step5` 四个六兽字段 + 每爻 `ben_yin_yang`。
+   若校验失败（exit code=1），**不得继续**——先修正 JSON 中缺失的字段，重新校验通过后再进入步骤5。
 5. 调用本地 Python 脚本生成 HTML：
-   ```
+   ```bash
    python <skill_dir>/scripts/generate_report.py -i "{卦例目录}/liuyao-data.json" -o "{卦例目录}/liuyao-report.html"
    ```
 6. 脚本输出的确认信息即为第九步的验证结果
@@ -530,9 +555,9 @@ C. 16条原则检查：
 | 进入第二步 | `references/jie-gua-xiang-jie.md` | 第二节 |
 | 用神 kong_wang=true / 月破 / 被日冲 | `references/dong-bian-fa-ze.md` | 第二、四节 |
 | 任何爻被日辰合（如午未合、辰酉合等） | `references/dong-bian-fa-ze.md` | 第六节 |
-| 卦中存在任何 dong:true | `references/dong-bian-fa-ze.md` + `references/jie-gua-xiang-jie.md` | 全部 / 第三节 |
-| 存在三合/六合/六冲/刑害/三会 | `references/di-zhi-relations.md` | 对应部分 |
-| 六合/六冲/反吟/伏吟/独发/独静 | `references/te-shu-ge-ju.md` | 对应条目 |
+| JSON lines 中存在任何 dong:true | `references/dong-bian-fa-ze.md` + `references/jie-gua-xiang-jie.md` | 全部 / 第三节 |
+| JSON patterns.sanhui_ju / dizhi_liuhe / dizhi_liuchong 非空 | `references/di-zhi-relations.md` | 对应部分 |
+| JSON patterns.ben_liuchong_gua / ben_liuhe_gua=true 或 fuyin/fanyin 非空或 dufa/dujing=true | `references/te-shu-ge-ju.md` | 对应条目 |
 | 用神明现但其爻下 fu_shen 非空（第三步·附） | `references/dong-bian-fa-ze.md` | 第十节 |
 | 执行第3.5步 | `references/fushi-riyue-guashen.md` + `references/jie-gua-xiang-jie.md` | 全部 / 第3.5节 |
 | 进入第四步 | `references/jie-gua-xiang-jie.md` | 第四节 |
@@ -544,7 +569,7 @@ C. 16条原则检查：
 | 应期需地支合冲推算 | `references/di-zhi-relations.md` | 合冲速查 |
 | 进入第七步 | `references/jie-gua-xiang-jie.md` | 第七节 |
 | intent 对应生活场景 | `references/zonghe-yingyong-leixiang.md` | 对应场景 |
-| 进入第八步 | `references/jie-gua-xiang-jie.md` | 第八节 |
+| 进入第八步 | `references/jie-gua-xiang-jie.md` | 第八节（16条原则速查表见 SKILL.md 第八步内联） |
 | 进入第九步 | `references/html-report-guide.md` | 全部 |
 
 ### 按需加载（无强触发时可选）

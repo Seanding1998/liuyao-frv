@@ -75,6 +75,20 @@ _GONG_WUXING = {
 _SHENG = {"木": "火", "火": "土", "土": "金", "金": "水", "水": "木"}
 _KE   = {"木": "土", "土": "水", "水": "火", "火": "金", "金": "木"}
 
+# ── 地支关系常量（格局自动检测用）──────────────────────────
+DIZHI_LIUHE_PAIRS = [
+    ("子", "丑"), ("寅", "亥"), ("卯", "戌"), ("辰", "酉"), ("巳", "申"), ("午", "未"),
+]
+DIZHI_LIUCHONG_PAIRS = [
+    ("子", "午"), ("丑", "未"), ("寅", "申"), ("卯", "酉"), ("辰", "戌"), ("巳", "亥"),
+]
+DIZHI_SANHUI_GROUPS = [
+    ("亥", "子", "丑"),   # 北方水局
+    ("寅", "卯", "辰"),   # 东方木局
+    ("巳", "午", "未"),   # 南方火局
+    ("申", "酉", "戌"),   # 西方金局
+]
+
 
 def _liuqin_by_gong(gong_wuxing, yao_wuxing):
     """按本卦宫五行定爻的六亲（传统本卦宫法）"""
@@ -89,6 +103,94 @@ def _liuqin_by_gong(gong_wuxing, yao_wuxing):
     if _SHENG.get(yao_wuxing) == gong_wuxing:
         return "父母"
     return "?"
+
+
+def detect_patterns(lines, ben_gua_attr, bian_gua_attr):
+    """特殊格局自动检测（规则化判断，非 AI 手动识别）
+
+    从 lines 数据自动推断三会局 / 地支六合 / 地支六冲 / 伏吟 / 反吟 / 独发 / 独静 /
+    本卦六冲卦 / 本卦六合卦。此函数是格局检测的唯一权威来源——
+    SKILL.md 第三步应直接读取 JSON 的 patterns 字段，不再让 AI 手动识别。
+
+    参数：
+      lines:          build_paipan_data 产出的 lines 数组
+      ben_gua_attr:   本卦属性（"六冲"/"六合"/""/None）
+      bian_gua_attr:  变卦属性
+
+    返回 dict。
+    """
+    dizhi_list = [l["di_zhi"] for l in lines]
+    dizhi_set = set(dizhi_list)
+    dong_lines = [l for l in lines if l["dong"]]
+    dong_count = len(dong_lines)
+
+    # ── 三会局：三支俱全即记录，旬空者标"虚势"──
+    sanhui = []
+    for group in DIZHI_SANHUI_GROUPS:
+        present = [dz for dz in group if dz in dizhi_set]
+        if len(present) == 3:
+            kong_pos = [l["pos"] for l in lines
+                        if l["di_zhi"] in group and l.get("kong_wang")]
+            sanhui.append({
+                "group": "".join(group),
+                "status": "虚势" if kong_pos else "成局",
+                "kong_positions": kong_pos,
+            })
+
+    # ── 地支六合：卦中任意两爻地支成合 ──
+    liuhe = []
+    for a, b in DIZHI_LIUHE_PAIRS:
+        if a in dizhi_set and b in dizhi_set:
+            pos = [l["pos"] for l in lines if l["di_zhi"] in (a, b)]
+            liuhe.append({"pair": f"{a}{b}", "positions": pos})
+
+    # ── 地支六冲：卦中任意两爻地支相冲 ──
+    liuchong = []
+    for a, b in DIZHI_LIUCHONG_PAIRS:
+        if a in dizhi_set and b in dizhi_set:
+            pos = [l["pos"] for l in lines if l["di_zhi"] in (a, b)]
+            liuchong.append({"pair": f"{a}{b}", "positions": pos})
+
+    # ── 伏吟：动爻变爻同地支 ──
+    fuyin = []
+    for l in dong_lines:
+        bian = l.get("bian_yao")
+        if bian and bian["di_zhi"] == l["di_zhi"]:
+            fuyin.append(l["pos"])
+
+    # ── 反吟：动爻变爻相冲 ──
+    chong_set = {frozenset(p) for p in DIZHI_LIUCHONG_PAIRS}
+    fanyin = []
+    for l in dong_lines:
+        bian = l.get("bian_yao")
+        if bian and frozenset((l["di_zhi"], bian["di_zhi"])) in chong_set:
+            fanyin.append(l["pos"])
+
+    # ── 独发 / 独静 ──
+    # 独发：六爻中仅一爻发动    独静：六爻中仅一爻不发动
+    dufa = (dong_count == 1)
+    dujing = (dong_count == 5)
+
+    # ── 本卦 / 变卦属性（六合卦、六冲卦、游魂、归魂）──
+    ben_attr = ben_gua_attr or ""
+    bian_attr = bian_gua_attr or ""
+    ben_liuchong_gua = "六冲" in ben_attr
+    ben_liuhe_gua = "六合" in ben_attr
+
+    return {
+        "sanhui_ju": sanhui,
+        "dizhi_liuhe": liuhe,
+        "dizhi_liuchong": liuchong,
+        "fuyin_positions": fuyin,
+        "fanyin_positions": fanyin,
+        "dufa": dufa,
+        "dujing": dujing,
+        "ben_gua_attr": ben_attr,
+        "bian_gua_attr": bian_attr,
+        "ben_liuchong_gua": ben_liuchong_gua,
+        "ben_liuhe_gua": ben_liuhe_gua,
+        "dong_count": dong_count,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -717,9 +819,10 @@ class LiuYaoPaipan:
     # ── 排盘 ────────────────────────────────────────────
 
     @staticmethod
-    def build_paipan_data(ygua, year, month, day, hour, minute, subject, intent):
+    def build_paipan_data(ygua, year, month, day, hour, minute, subject, intent, seed=None):
         """
         主入口：输入 ygua（6 位 1-4 编码列表，自下而上），输出完整 JSON 数据。
+        seed 非空时记录到 JSON 输出，便于复现。
         """
         # 1. 计算干支
         gz = LiuYaoPaipan.calc_ganzhi(year, month, day, hour, minute)
@@ -826,9 +929,9 @@ class LiuYaoPaipan:
                         "wu_xing": b_wx,
                     }
 
-            # 六兽
-            # 自上而下排列：上爻(i=5)→初爻(i=0)
-            # liushen 索引 = (start + i) % 6，其中 i=0 是初爻
+            # 六兽：自下而上排列（初爻得起始神，依次至上爻）
+            # 日干甲乙起青龙、丙丁起朱雀、戊起勾陈、己起腾蛇、庚辛起白虎、壬癸起玄武
+            # 初爻 i=0 得起始索引 liushen_start，每上一爻 +1，模 6 循环
             ls_idx = (liushen_start + i) % 6
             liu_shou = LIUSHEN_NAMES[ls_idx]
 
@@ -894,6 +997,8 @@ class LiuYaoPaipan:
             "bguastr": bguastr if has_dong else None,
             "ygua": "".join(ygua),
             "lines": lines,
+            "patterns": detect_patterns(lines, main_gua_attr, bian_gua_attr),
+            "seed": seed,
         }
 
         return result
@@ -928,9 +1033,15 @@ def main():
     parser.add_argument("--day", type=int, default=None)
     parser.add_argument("--hour", type=int, default=None)
     parser.add_argument("--minute", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=None,
+                        help="随机数种子（指定后摇卦结果可复现，不指定则真随机）")
     parser.add_argument("-o", "--output", default=None,
                         help="输出 JSON 到文件（推荐，避免终端编码问题）")
     args = parser.parse_args()
+
+    # seed 植入（仅影响自动摇卦；--yao 手动模式不受影响）
+    if args.seed is not None and not args.yao:
+        random.seed(args.seed)
 
     # 校验 intent
     if args.intent not in VALID_INTENTS:
@@ -983,10 +1094,17 @@ def main():
     # 排盘
     try:
         data = LiuYaoPaipan.build_paipan_data(
-            ygua, year, month, day, hour, minute, args.subject, args.intent
+            ygua, year, month, day, hour, minute, args.subject, args.intent,
+            seed=args.seed,
         )
     except ValueError as e:
-        print(f"错误：{e}", file=sys.stderr)
+        msg = str(e)
+        if "2026-2086" in msg:
+            # 纯 Python 回退的年份越界——给用户更友好的提示
+            print(f"错误：{msg}", file=sys.stderr)
+            print("提示：请安装 sxtwl 以支持其他年份：pip install sxtwl", file=sys.stderr)
+        else:
+            print(f"错误：{msg}", file=sys.stderr)
         sys.exit(1)
 
     # 标记排盘模式
