@@ -748,13 +748,51 @@ def generate(data: dict, output_path: str) -> str:
     return output_path
 
 
+def validate_json(data):
+    """校验 liuyao-data.json 的 schema 完整性（替代 SKILL.md 里的 inline Python heredoc）
+
+    统一校验入口，schema 演进只需改这一处。
+    返回 (ok: bool, errors: list[str])。
+    """
+    errors = []
+
+    # 顶层三大域
+    for k in ("meta", "yao", "steps"):
+        if k not in data:
+            errors.append(f"缺少顶层字段: {k}")
+
+    # 八步齐全
+    if "steps" in data:
+        s = data["steps"]
+        for step in ("step1", "step2", "step3", "step4",
+                      "step5", "step6", "step7", "step8"):
+            if step not in s:
+                errors.append(f"缺少 step: {step}")
+        # step5 子字段（历史易漏点）
+        if "step5" in s:
+            for fld in ("yong_shen_shou", "yong_shen_shou_xiang",
+                        "dong_yao_shou", "dong_yao_shou_xiang"):
+                if fld not in s["step5"]:
+                    errors.append(f"step5 缺少字段: {fld}")
+
+    # yao 数组每爻必须有阴阳属性（v1.5.4 修复的易错点）
+    if "yao" in data:
+        for i, y in enumerate(data["yao"]):
+            if "ben_yin_yang" not in y:
+                errors.append(f"yao[{i}] 缺少 ben_yin_yang（卦象面板会全错）")
+
+    return (len(errors) == 0, errors)
+
+
 def main():
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
 
-    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v1.4")
+    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v1.5")
     parser.add_argument("--input", "-i", required=True, help="输入 JSON 文件路径")
     parser.add_argument("--output", "-o", default="liuyao-report.html", help="输出 HTML 文件路径")
+    parser.add_argument("--validate", action="store_true",
+                        help="仅校验 JSON schema，不生成 HTML（用于第九步前置校验）")
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
@@ -763,6 +801,18 @@ def main():
 
     with open(args.input, "r", encoding="utf-8") as f:
         data = json.load(f)
+
+    # ── 校验模式：仅检查 schema，不生成 HTML ──
+    if args.validate:
+        ok, errors = validate_json(data)
+        if ok:
+            print("✅ Schema OK")
+            sys.exit(0)
+        else:
+            print(f"❌ Schema 校验失败（{len(errors)} 项）：", file=sys.stderr)
+            for e in errors:
+                print(f"  - {e}", file=sys.stderr)
+            sys.exit(1)
 
     # 自动适配扁平格式（paipan.py 直出）-> 包装为 meta/yao/steps
     if "meta" not in data:
