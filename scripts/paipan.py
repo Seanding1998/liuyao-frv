@@ -346,7 +346,8 @@ def calc_ganzhi_pure(year, month, day, hour=0):
     # 月干从寅月起始，偏移量 = 月支对寅的偏移
     month_offset = (DIZHI.index(month_zhi) - DIZHI.index("寅")) % 12
     month_gan_idx = (TIANGAN.index(yin_gan) + month_offset) % 10
-    month_gz = f"{TIANGAN[month_gan_idx]}{month_zhi}"
+    month_gan = TIANGAN[month_gan_idx]
+    month_gz = f"{month_gan}{month_zhi}"
 
     # 3. 日柱
     day_result = get_day_ganzhi(year, month, day)
@@ -376,13 +377,197 @@ def calc_ganzhi_pure(year, month, day, hour=0):
     mk1 = KONGWANG_ZU[cha_m - 2]
     mk2 = KONGWANG_ZU[cha_m - 1]
 
+    # 农历日期（纯 Python 查表）
+    lunar_info = _solar_to_lunar_pure(year, month, day)
+    lunar_year_gz = _lunar_year_gz(lunar_info["year"])
+    lunar_str = _format_lunar_cn(
+        lunar_year_gz, lunar_info["month"], lunar_info["day"], lunar_info["is_leap"]
+    )
+
     return {
         "year": year_gz, "month": month_gz, "day": day_gz, "hour": hour_gz,
         "month_branch": month_zhi,
         "ri_gan": ri_gan, "ri_zhi": ri_zhi,
         "xunkong": [kw1, kw2],
         "yue_xunkong": [mk1, mk2],
+        "lunar": lunar_str,
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+#  农历日期计算（双轨：sxtwl 直接取 / 纯 Python 查表）
+# ═══════════════════════════════════════════════════════════════
+# 消除 AI 在生成 HTML 报告 meta.lunar 字段时手算农历的环节 —— 既易错又费 token。
+# sxtwl 分支直接调用库；纯 Python 分支用下面这张预生成的查找表。
+
+# ── 2025-2086 农历查找表（由 sxtwl 一次性生成，纯 Python 回退用）────
+# 覆盖 2025 是为了让 2026 年初（正月初一之前）的日期能正确归到农历乙巳年。
+# 格式：公历年 → (正月初一公历月, 正月初一公历日, 月份天数位编码, 总月数, 闰月号)
+# 月份天数位编码：按时间顺序（正月、二月、…、闰X月(如有)、…、十二月）
+#   每位 1=30 天，0=29 天；高位对应正月
+#   位宽 = 总月数（12 平年 / 13 闰年）
+# 闰月号：0=无闰；1-12=闰几月（该月之后插入闰月）
+# ruff: noqa: E501
+LUNAR_TABLE_2025_2086 = {
+    2025: (1, 29, 0b1010010101110, 13, 6),
+    2026: (2, 17, 0b0101001001110, 12, 0),
+    2027: (2, 6, 0b0110100100110, 12, 0),
+    2028: (1, 26, 0b1110100100110, 13, 5),
+    2029: (2, 13, 0b0110101010011, 12, 0),
+    2030: (2, 3, 0b0010110101010, 12, 0),
+    2031: (1, 23, 0b0110101101010, 13, 3),
+    2032: (2, 11, 0b0100101101101, 12, 0),
+    2033: (1, 31, 0b0100101011101, 13, 11),
+    2034: (2, 19, 0b0010010101101, 12, 0),
+    2035: (2, 8, 0b0101001001101, 12, 0),
+    2036: (1, 28, 0b1101001001011, 13, 6),
+    2037: (2, 15, 0b0110100100101, 12, 0),
+    2038: (2, 4, 0b0110101010010, 12, 0),
+    2039: (1, 24, 0b1101101010100, 13, 5),
+    2040: (2, 12, 0b0101101011010, 12, 0),
+    2041: (2, 1, 0b0010101101101, 12, 0),
+    2042: (1, 22, 0b0100101011011, 13, 2),
+    2043: (2, 10, 0b0010010011011, 12, 0),
+    2044: (1, 30, 0b1010010010111, 13, 7),
+    2045: (2, 17, 0b0101001001011, 12, 0),
+    2046: (2, 6, 0b0101010100101, 12, 0),
+    2047: (1, 26, 0b1011010100101, 13, 5),
+    2048: (2, 14, 0b0011011010010, 12, 0),
+    2049: (2, 2, 0b0101011011010, 12, 0),
+    2050: (1, 23, 0b0101010110110, 13, 3),
+    2051: (2, 11, 0b0100100110111, 12, 0),
+    2052: (2, 1, 0b0100100101111, 13, 8),
+    2053: (2, 19, 0b0010010010111, 12, 0),
+    2054: (2, 8, 0b0011001001011, 12, 0),
+    2055: (1, 28, 0b0110101001010, 13, 6),
+    2056: (2, 15, 0b0111010100101, 12, 0),
+    2057: (2, 4, 0b0011010101010, 12, 0),
+    2058: (1, 24, 0b1010101101100, 13, 4),
+    2059: (2, 12, 0b0101010101110, 12, 0),
+    2060: (2, 2, 0b0100100101110, 12, 0),
+    2061: (1, 21, 0b1100100101110, 13, 3),
+    2062: (2, 9, 0b0110010010110, 12, 0),
+    2063: (1, 29, 0b1101010010101, 13, 7),
+    2064: (2, 17, 0b0110101001010, 12, 0),
+    2065: (2, 5, 0b0110110100101, 12, 0),
+    2066: (1, 26, 0b0101101010101, 13, 5),
+    2067: (2, 14, 0b0010101101010, 12, 0),
+    2068: (2, 3, 0b0101001101101, 12, 0),
+    2069: (1, 23, 0b0101001011101, 13, 4),
+    2070: (2, 11, 0b0010100101101, 12, 0),
+    2071: (1, 31, 0b1010100101011, 13, 8),
+    2072: (2, 19, 0b0101010010101, 12, 0),
+    2073: (2, 7, 0b0101101001010, 12, 0),
+    2074: (1, 27, 0b1011010101010, 13, 6),
+    2075: (2, 15, 0b0101011010101, 12, 0),
+    2076: (2, 5, 0b0010101011010, 12, 0),
+    2077: (1, 24, 0b1010010111010, 13, 4),
+    2078: (2, 12, 0b0101001011011, 12, 0),
+    2079: (2, 2, 0b0010100101011, 12, 0),
+    2080: (1, 22, 0b1010100100111, 13, 3),
+    2081: (2, 9, 0b0011010010011, 12, 0),
+    2082: (1, 29, 0b0111001010011, 13, 7),
+    2083: (2, 17, 0b0011010101010, 12, 0),
+    2084: (2, 6, 0b0101011010101, 12, 0),
+    2085: (1, 26, 0b0100110110101, 13, 5),
+    2086: (2, 14, 0b0010010110110, 12, 0),
+}
+
+
+def _solar_to_lunar_pure(year, month, day):
+    """纯 Python 公历转农历（基于 LUNAR_TABLE_2025_2086 查找表）。
+
+    返回 dict：{year, month, day, is_leap}（year 为农历年数字，月日按农历）。
+    超出 2025-2086 范围抛 ValueError。
+    """
+    target = date(year, month, day)
+
+    # 1. 确定 target 所在的农历年（以正月初一分界）
+    if year in LUNAR_TABLE_2025_2086:
+        ny_m, ny_d = LUNAR_TABLE_2025_2086[year][:2]
+        if target < date(year, ny_m, ny_d):
+            lunar_year = year - 1
+        else:
+            lunar_year = year
+    else:
+        lunar_year = year - 1
+
+    if lunar_year not in LUNAR_TABLE_2025_2086:
+        raise ValueError(
+            f"农历数据超出纯 Python 支持范围 (2025-2086)，年份 {year} 对应农历年 {lunar_year} 无数据。"
+            f"请安装 sxtwl：pip install sxtwl"
+        )
+
+    # 2. 计算 delta_days（从农历正月初一算起的偏移）
+    ny_m, ny_d = LUNAR_TABLE_2025_2086[lunar_year][:2]
+    delta_days = (target - date(lunar_year, ny_m, ny_d)).days
+
+    if delta_days < 0:
+        raise ValueError("农历计算错误：delta_days < 0")
+
+    # 3. 遍历月找命中
+    _, _, months_bits, num_months, leap = LUNAR_TABLE_2025_2086[lunar_year]
+
+    days_acc = 0
+    for i in range(num_months):
+        bit_pos = num_months - 1 - i
+        m_days = 30 if (months_bits >> bit_pos) & 1 else 29
+
+        if days_acc + m_days > delta_days:
+            lunar_day = delta_days - days_acc + 1
+
+            # 确定月号与闰标志（leap 是"闰几月"，序号 i 是按时间顺序的第几个月）
+            if leap > 0 and i == leap:
+                lunar_month = leap
+                is_leap = True
+            elif leap > 0 and i > leap:
+                lunar_month = i  # 闰月之后，序号 i 对应月号 i
+                is_leap = False
+            else:
+                lunar_month = i + 1  # 闰月之前或无闰月
+                is_leap = False
+
+            return {
+                "year": lunar_year,
+                "month": lunar_month,
+                "day": lunar_day,
+                "is_leap": is_leap,
+            }
+        days_acc += m_days
+
+    raise ValueError(f"农历计算失败：{year}-{month}-{day} 超出农历年 {lunar_year} 范围")
+
+
+# 中文月日数字（用于农历显示）
+_LUNAR_MONTH_CN = ["正", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "腊"]
+_LUNAR_DAY_CN = [
+    "初一", "初二", "初三", "初四", "初五", "初六", "初七", "初八", "初九", "初十",
+    "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十",
+    "廿一", "廿二", "廿三", "廿四", "廿五", "廿六", "廿七", "廿八", "廿九", "三十",
+]
+
+
+def _lunar_year_gz(lunar_year_num):
+    """取农历年（数字）对应的干支，如 2026 → '丙午'。
+
+    优先查 YEAR_GZ_LICHUN 表（精确，2026-2086）；超出表范围用 60 甲子周期推算
+    （如 2025 → 乙巳，用于 2026 年初跨年场景）。
+    """
+    if lunar_year_num in YEAR_GZ_LICHUN:
+        gan, zhi, _ = YEAR_GZ_LICHUN[lunar_year_num]
+        return gan + zhi
+    # 60 甲子周期推算：2026 = 丙午（天干 idx 2，地支 idx 6）
+    delta = lunar_year_num - 2026
+    gan_idx = (2 + delta) % 10
+    zhi_idx = (6 + delta) % 12
+    return TIANGAN[gan_idx] + DIZHI[zhi_idx]
+
+
+def _format_lunar_cn(lunar_year_gz, lunar_month, lunar_day, is_leap):
+    """格式化农历日期为中文表示，如 '丙午年五月廿六' / '丙午年闰五月廿六'。"""
+    month_str = ("闰" if is_leap else "") + _LUNAR_MONTH_CN[lunar_month - 1]
+    day_str = _LUNAR_DAY_CN[lunar_day - 1]
+    return f"{lunar_year_gz}年{month_str}月{day_str}"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -802,12 +987,21 @@ class LiuYaoPaipan:
                 cha_m += 12
             yue_xunkong = [KONGWANG_ZU[cha_m - 2], KONGWANG_ZU[cha_m - 1]]
 
+            # 农历日期（sxtwl 直接取，消除 AI 手算环节）
+            lunar_year_num = day_obj.getLunarYear()
+            lunar_month = day_obj.getLunarMonth()
+            lunar_day = day_obj.getLunarDay()
+            lunar_is_leap = day_obj.isLunarLeap()
+            lunar_year_gz = _lunar_year_gz(lunar_year_num)
+            lunar_str = _format_lunar_cn(lunar_year_gz, lunar_month, lunar_day, lunar_is_leap)
+
             return {
                 "year": year_gz, "month": month_gz, "day": day_gz, "hour": hour_gz,
                 "month_branch": month_gz[1],
                 "ri_gan": ri_gan, "ri_zhi": ri_zhi,
                 "xunkong": xunkong,
                 "yue_xunkong": yue_xunkong,
+                "lunar": lunar_str,
                 "backend": "sxtwl",
             }
         else:
@@ -980,6 +1174,7 @@ class LiuYaoPaipan:
                 "day": gz["day"], "hour": gz["hour"],
             },
             "backend": gz.get("backend", "unknown"),
+            "lunar": gz.get("lunar", ""),
             "month_branch": gz["month_branch"],
             "ri_chen": gz["ri_zhi"],
             "kong_wang": gz["xunkong"],
