@@ -5,7 +5,7 @@ description: |
   使用场景：六爻占卜、金钱卦、纳甲筮法、周易预测、起卦解卦。
 license: MIT
 metadata:
-  version: "1.5.8"
+  version: "1.5.9"
   category: divination
 ---
 # 六爻解卦分析 Skill
