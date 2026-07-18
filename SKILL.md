@@ -375,7 +375,7 @@ kong_wang: 是否旬空 (true/false)
 
 > ⛔ **绝对约束**：六兽不能单独断吉凶，不得以六兽取象逆转前面的旺衰/动变结论。
 
-> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第五节（六兽吉凶象表）。如需精细类象 → 额外加载 `references/liuqin-liushen-leixiang.md` 六神类象部分。**若 intent 为「失物」「寻人」「天气」等需精确定位物品/人物的类别 → 必须额外加载 `references/bagua-leixiang.md` 和 `references/shier-dizhi-leixiang.md` 全文**，不得凭记忆取象。
+> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第五节（六兽吉凶象表）。**若 intent 为「失物」「寻人」「天气」等需精确定位物品/人物的类别 → 必须额外加载 `references/bagua-leixiang.md` 和 `references/shier-dizhi-leixiang.md` 全文**，不得凭记忆取象。
 
 仅对用神和动爻做六兽修饰分析。
 
@@ -425,7 +425,7 @@ kong_wang: 是否旬空 (true/false)
 
 **⛔ 准入条件**：第一至六步全部完成。
 
-> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第七节（完整输出模板 + 填写要求）。若 intent 对应生活场景 → 额外加载 `references/zonghe-yingyong-leixiang.md` 对应场景小节。
+> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第七节（完整输出模板 + 填写要求）。
 
 严格按模板逐段输出，所有占位符必须填入实际内容，不得留空。每条结论必须可回溯到前六步的具体输出。语气半文半白。
 
@@ -569,7 +569,6 @@ C. 16条原则检查：
 | 高级应期（合处逢冲等） | `references/yingqi-faze.md` | 全部 |
 | 应期需地支合冲推算 | `references/di-zhi-relations.md` | 合冲速查 |
 | 进入第七步 | `references/jie-gua-xiang-jie.md` | 第七节 |
-| intent 对应生活场景 | `references/zonghe-yingyong-leixiang.md` | 对应场景 |
 | 进入第八步 | `references/jie-gua-xiang-jie.md` | 第八节（16条原则速查表见 SKILL.md 第八步内联） |
 | 进入第九步 | `references/html-report-guide.md` | 全部 |
 
@@ -580,6 +579,4 @@ C. 16条原则检查：
 | 五行生克/六亲推导/六十甲子纳音 | `references/wuxing-shengke.md` |
 | 六十四卦八宫/世爻位/游魂归魂 | `references/64-gua.md` |
 | 八卦/十二地支万物类象 | `references/bagua-leixiang.md` / `references/shier-dizhi-leixiang.md` |
-| 六十四卦爻象/阳宅灶门 | `references/64-gua-yongfa.md` |
-| 六亲/六神精细类象 | `references/liuqin-liushen-leixiang.md` |
 | HTML 报告样式调试 | `references/html-report-guide.md` |
