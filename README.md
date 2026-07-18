@@ -12,7 +12,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-org/liuyao-divination.git ~/.codex/skills/liuyao-divination
+git clone https://github.com/Seanding1998/liuyao.git ~/.codex/skills/liuyao-divination
 ```
 
 ### 依赖
