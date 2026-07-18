@@ -189,8 +189,12 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
         )
 
         if len(present_in_gua) == 3:
+            # 日月引动：日辰或月建占其中一字，可代替动爻激活合局
+            sun_moon_activates = (month_branch in group_tuple) or (ri_chen in group_tuple)
             if has_dong:
                 status = "成局"
+            elif sun_moon_activates:
+                status = "成局"  # 日月引动
             else:
                 status = "虚合"
             subtype = ""
