@@ -1,11 +1,11 @@
 ---
 name: liuyao-divination
 description: |
-   专业六爻纳甲筮法排盘与解卦。自动起卦排盘，十步完整流程（第零步排盘→审题取用神→判定旺衰→追踪动变→伏神分析→世应关系→六兽取象→应期推断→综合断语→断后校验→HTML报告）。
+   专业六爻纳甲筮法排盘与解卦。自动起卦排盘，十步完整流程（第零步排盘→审题取用神→判定旺衰→追踪动变→伏神分析→世应关系→六神取象→应期推断→综合断语→断后校验→HTML报告）。
   使用场景：六爻占卜、金钱卦、纳甲筮法、周易预测、起卦解卦。
 license: MIT
 metadata:
-  version: "1.5.10"
+  version: "1.6.0"
   category: divination
 ---
 # 六爻解卦分析 Skill
@@ -23,19 +23,30 @@ metadata:
 
 ## 全局执行铁律
 
-1. **排盘优先**：必须先执行第零步自动排盘，产出完整卦象 JSON 数据后，方可进入解卦流程。不得跳过排盘直接解卦。
-2. **顺序不可逆**：必须从第零步走到第九步，一步一结。
-3. **输出不可省**：每一步的「📤 强制输出」块必须显式写出，不得以"已分析"替代。
-4. **门禁不可破**：每一步的「⛔ 准入条件」若不满足，必须回溯补齐再进入。
-5. **引用不可跳**：满足「⛔ 强制加载规则」的 reference 文件必须加载后使用其内容，不得凭记忆。
-6. **校验不可略**：第八步断后校验必须逐条比对，发现问题必须返回修正。
-7. **渐进加载**：进入每一步时，先按门禁中的加载规则载入对应 reference 文件的指定章节，再执行。
-8. **落地不可略**：每步的「📤 强制输出」必须同步写入本地 md 文件（`步骤N-名称.md`），存放于桌面卦例目录中。第九步 HTML 须从本地 md 文件读取内容构建 JSON，不得仅凭记忆。
-9. **爻位用汉字**：所有输出文本中的爻位一律使用汉字（初爻、二爻、三爻、四爻、五爻、六爻），禁止使用阿拉伯数字（1爻、2爻、3爻…）。仅 JSON 数据的 `pos` 字段和脚本代码中保留数字。
-10. **旺衰内量化外自然**：内部推理可用数字量化（如月建助+1，生+2、日辰克-1，冲-2、合解冲有合有冲+0等）辅助判定，但写入步骤输出和最终报告时，必须转换为自然语言（如「月建生用神，旺」「日辰克用神，囚」），不得在用户可见文本中出现 +1/-1 等打分记号。
-11. **格局不遗漏**：第三步必须检测三会局、六合、六冲、伏吟、反吟、六冲卦等特殊格局。第七步综合断语必须引用检测结论。JSON step3.pattern 字段必须包含完整格局分析，不得用一句「静卦无特殊格局」敷衍。
-12. **文件统一存放**：所有过程文件（`paipan_result.json`、`liuyao-data.json`、`liuyao-report.html`、各步骤 md 文件）必须统一存入桌面卦例目录 `~/Desktop/YY.MM.DD-本卦名之变卦名-事件简称/`。此目录在**第零步意图确认后立即创建**（先用临时名，排盘完成后根据卦名重命名），是本次卦例的唯一文件存放位置。各步骤读写文件时必须使用该目录的绝对路径，严禁将过程文件散落于用户主目录、工作目录或脚本目录。桌面路径三平台适配：`~/Desktop/` 优先 → 中文 Linux `~/桌面/` → 无桌面环境时回退到 `~/.liuyao/cases/`（不污染主目录）。
-13. **格局检测单一权威**：特殊格局（三会局/六合/六冲/伏吟/反吟/独发/独静/本卦属性）由 `paipan.py` 的 `detect_patterns()` 自动检测，结果写入 JSON `patterns` 字段。解卦流程中 Agent **直接读取 JSON `patterns` 字段**，**禁止手动重新识别**（两套逻辑会打架）。第三步和第八步校验均以 JSON 数据为准。
+> 📌 **命名区分**：本节的 15 条称为「**铁律**」（执行流程约束），与 `references/jie-gua-xiang-jie.md` 中独立的「**16 条核心原则**」（断卦推理原则）是两套独立体系，编号不互通。引用时须写「**铁律 N**」或「**原则 N**」以示区分。
+
+1. **铁律 1·排盘优先**：必须先执行第零步自动排盘，产出完整卦象 JSON 数据后，方可进入解卦流程。不得跳过排盘直接解卦。
+2. **铁律 2·顺序不可逆**：必须从第零步走到第九步，一步一结。
+3. **铁律 3·输出不可省**：每一步的「📤 强制输出」块必须显式写出，不得以"已分析"替代。
+4. **铁律 4·门禁不可破**：每一步的「⛔ 准入条件」若不满足，必须回溯补齐再进入。
+5. **铁律 5·引用不可跳**：满足「⛔ 强制加载规则」的 reference 文件必须加载后使用其内容，不得凭记忆。
+6. **铁律 6·校验不可略**：第八步断后校验必须逐条比对，发现问题必须返回修正。
+7. **铁律 7·渐进加载**：进入每一步时，先按门禁中的加载规则载入对应 reference 文件的指定章节，再执行。
+8. **铁律 8·落地不可略**：每步的「📤 强制输出」必须同步写入本地 md 文件（`步骤N-名称.md`），存放于桌面卦例目录中。第九步 HTML 须从本地 md 文件读取内容构建 JSON，不得仅凭记忆。
+9. **铁律 9·爻位用汉字**：所有输出文本中的爻位一律使用汉字（初爻、二爻、三爻、四爻、五爻、六爻），禁止使用阿拉伯数字（1爻、2爻、3爻…）。仅 JSON 数据的 `pos` 字段和脚本代码中保留数字。
+10. **铁律 10·旺衰内量化外自然**：内部推理可用数字量化（如月建助+1，生+2、日辰克-1，冲-2、合解冲有合有冲+0等）辅助判定，但写入步骤输出和最终报告时，必须转换为自然语言（如「月建生用神，旺」「日辰克用神，囚」），不得在用户可见文本中出现 +1/-1 等打分记号。
+11. **铁律 11·格局不遗漏**：第三步必须检测三会局、六合、六冲、伏吟、反吟、六冲卦等特殊格局。第七步综合断语必须引用检测结论。JSON step3.pattern 字段必须包含完整格局分析，不得用一句「静卦无特殊格局」敷衍。
+12. **铁律 12·文件统一存放**：所有过程文件（`paipan_result.json`、`liuyao-data.json`、`liuyao-report.html`、各步骤 md 文件）必须统一存入桌面卦例目录 `~/Desktop/YY.MM.DD-本卦名之变卦名-事件简称/`。此目录在**第零步意图确认后立即创建**（先用临时名，排盘完成后根据卦名重命名），是本次卦例的唯一文件存放位置。各步骤读写文件时必须使用该目录的绝对路径，严禁将过程文件散落于用户主目录、工作目录或脚本目录。桌面路径三平台适配：`~/Desktop/` 优先 → 中文 Linux `~/桌面/` → 无桌面环境时回退到 `~/.liuyao/cases/`（不污染主目录）。
+13. **铁律 13·格局检测单一权威**：特殊格局（三会局/六合/六冲/伏吟/反吟/独发/独静/本卦属性）由 `paipan.py` 的 `detect_patterns()` 自动检测，结果写入 JSON `patterns` 字段。解卦流程中 Agent **直接读取 JSON `patterns` 字段**，**禁止手动重新识别**（两套逻辑会打架）。第三步和第八步校验均以 JSON 数据为准。
+14. **铁律 14·路由表优先**：第零步意图确认后，必须立即查「第零步附：intent 路由表」预读该 intent 列出的全部场景类/类象类 references（精确到小节），贯穿后续所有步骤使用。跨 intent 问题取并集。不得凭记忆替代，不得等到第七步才加载场景类。
+15. **铁律 15·每步自检门禁**：每一步开头必须显式输出「**本步已加载 references 清单**」，再开始执行该步分析。**统一写入位置**：紧接各步「📤 强制输出」块的 `【第X步·输出】` 标题之后，作为该块的第一行，格式固定为：
+    ```
+    - 本步已加载 references 清单（含关键句摘录，证明已真读）：
+      - [文件名 小节]：「[所读内容的关键句或核心规则，1-2 句，原文摘录或紧贴原文的复述]」
+      - [文件名 小节]：「[关键句]」
+      - ...
+    ```
+    > ⛔ **必须摘录关键句**：只写文件名+小节号不算合规——必须为每个引用的 reference 摘录 1-2 句核心内容（如"bagua 乾：身体对应首/肺，疾病对应头胸肺"），证明确实执行了 Read。未摘录 = 步骤无效，第八步 D 项校验直接判失败回退。第八步本身的输出块则以 `【第八步·校验报告】` 的 A 项「步骤完整性」里列出的各步清单汇总为本步清单。
 
 ---
 
@@ -51,9 +62,17 @@ metadata:
 - `ri_chen`：日辰地支
 - `kong_wang`：日柱旬空地支列表 `[str, str]`
 - `question`：所问之事
-- `intent`：意图类别 — `求财|官运|学业|感情|健康|孕产|出行|失物|词讼|天气|通用`
+- `intent`：意图类别 — `求财|官运|学业|感情|健康|孕产|出行|失物|寻人|词讼|阳宅|天气|通用`
 - `ben_gua`：本卦名
 - `bian_gua`：变卦名（无动爻则为 null）
+- `patterns`：自动检测的特殊格局对象（由 `paipan.py` 的 `detect_patterns()` 产出，Agent 直接读取不得手动识别）：
+  - `sanhui_ju` / `dizhi_liuhe` / `dizhi_liuchong`：三会局 / 地支六合对 / 地支六冲对
+  - `fuyin_positions` / `fanyin_positions`：伏吟 / 反吟 动爻位
+  - `dufa` / `dujing`：独发 / 独静 (bool)
+  - `ben_liuchong_gua` / `ben_liuhe_gua`：本卦是六冲卦 / 六合卦 (bool)
+  - `ben_you_hun` / `ben_gui_hun` / `bian_you_hun` / `bian_gui_hun`：本卦/变卦是游魂卦 / 归魂卦 (bool)
+  - `ben_gua_attr` / `bian_gua_attr`：原始中文字符串（如"六合卦 游魂卦"），冗余字段，bool 字段已结构化拆出
+  - `dong_count`：动爻总数
 
 每个爻的数据结构：
 
@@ -65,7 +84,7 @@ liu_qin:  六亲 (父母/官鬼/兄弟/妻财/子孙)
 shi_ying: 世爻/应爻 标记
 dong:     是否发动 (true/false)
 bian_yao: 变爻信息（如有）{ di_zhi, wu_xing, liu_qin }
-liu_shou: 六兽 (青龙/朱雀/勾陈/腾蛇/白虎/玄武)
+liu_shou: 六神 (青龙/朱雀/勾陈/腾蛇/白虎/玄武)
 fu_shen:  伏神信息（如有）{ liu_qin, di_zhi, wu_xing }
 kong_wang: 是否旬空 (true/false)
 ```
@@ -76,7 +95,9 @@ kong_wang: 是否旬空 (true/false)
 
 ### 流程概览
 
-| 步骤 | 名称 | 条件 | 说明 |
+> 💡 下表「核心原则」列引用的是 `references/jie-gua-xiang-jie.md` 顶部独立的「16 条核心原则」编号（如「#1 #5」表示原则 1 + 原则 5），与「铁律 N」是两套体系。
+
+| 步骤 | 名称 | 条件 | 核心原则 |
 | --- | --- | --- | --- |
 | 0 | **自动排盘** | 必执行（入口） | 提问→取意图→脚本起卦→产出 JSON |
 | 1 | 审题取用神 | 必执行 | #1 #5 |
@@ -85,7 +106,7 @@ kong_wang: 是否旬空 (true/false)
 | 3附 | 伏神旁注 | 仅当用神明现且其下有伏神 | — |
 | 3.5 | 伏神分析 | 仅当用神不现 | #8 |
 | 4 | 分析世应关系 | 必执行 | #9 #11 |
-| 5 | 六兽取象 | 必执行 | #5 |
+| 5 | 六神取象 | 必执行 | #5 |
 | 6 | 应期推断 | 必执行 | #4 #9 |
 | 7 | 综合断语输出 | 必执行 | #6 #7 |
 | 8 | 断后校验 | 必执行 | #1~#16 全检 |
@@ -113,7 +134,9 @@ kong_wang: 是否旬空 (true/false)
 | 孕产 | 子孙 | 妻财、兄弟 | 怀孕、生育、胎产、子女 |
 | 出行 | 世爻 | 妻财、子孙 | 出行、旅行、出差、迁移 |
 | 失物 | 妻财 | 子孙、父母 | 失物、遗失、寻找、被盗 |
+| 寻人 | 兄弟 | 官鬼、子孙、父母 | 寻人、走失、下落、失踪 |
 | 词讼 | 官鬼 | 父母、兄弟、妻财 | 官司、纠纷、诉讼 |
+| 阳宅 | 父母 | 官鬼 | 风水、阳宅、搬家、宅运、灶、门主 |
 | 天气 | 父母 | 官鬼、子孙、妻财、兄弟 | 天气、气候、晴雨 |
 | 通用 | 世爻 | — | 其他未分类的问题 |
 
@@ -180,7 +203,7 @@ kong_wang: 是否旬空 (true/false)
 - 卦例临时目录：[临时目录路径]
 - 排盘命令：[完整命令（含 -o 到卦例目录的路径，若有 --seed 也写出）]
 - 排盘结果摘要：本卦[名] 变卦[名] 世[世爻位]爻 应[应爻位]爻 动爻[N]个 计算后端=[sxtwl|pure] seed=[N或未指定]
-- 特殊格局（自动检测）：[列出 patterns 中非空项，如「六冲：丑未、本卦六冲卦」；全空写「无」]
+- 特殊格局（自动检测）：[列出 patterns 中非空项或 true 项，如「六冲：丑未、本卦六冲卦、本卦游魂卦」；全空写「无」。**注意**：`ben_you_hun`/`ben_gui_hun`/`bian_you_hun`/`bian_gui_hun` 为 true 时必须列出，触发第三步加载 `references/64-gua.md`]
 - 农历日期：[直接读 JSON `lunar` 字段，如「丙午年五月廿六」；**禁止手算**——双轨（sxtwl + pure）均已自动计算]
 - JSON 数据路径：`{卦例目录}/paipan_result.json`（通过 `read_file` 工具读取，已解析为内存对象）
 - 最终目录名：[重命名后的完整路径]
@@ -190,6 +213,104 @@ kong_wang: 是否旬空 (true/false)
 
 **✅ 检查点**：用户是否已在单轮中确认 intent + sxtwl 选择？若选 B，占卦日期是否在 2026-2086 范围内？卦例临时目录是否已在桌面创建？排盘脚本是否输出到卦例目录内（非用户主目录）？脚本是否成功执行？JSON 输出的 `ben_gua`/`lines`/`backend`/`patterns`/`seed`/`lunar` 等关键字段是否完整？四柱是否有效？目录是否根据卦名重命名成功？
 
+> ⏭️ **下一步必做**：第零步通过后，**立即进入「第零步附：intent 路由表」执行预读并输出预读清单**（铁律 14、15 的执行点，不得跳过）。未完成第零步附，不得进入第一步。
+
+---
+
+### 第零步附：intent 路由表（意图确认后必读）
+
+> 📌 **核心铁律·分阶段预读**：意图确认后，**立即查本路由表**确定本次 intent 需要的 references 全集，但**按阶段预读，而非全部立即加载**。早期步骤（第一~第四步）专注于用神与旺衰判定，不需要场景类 references；第五步起进入取象才需要类象类；第七步才需要场景结论类。
+>
+> **分阶段预读规则**（核心优化：避免在第二步/第三步浪费 token 加载暂不使用的场景类内容）：
+>
+> **Tier 归类总表**（每个 reference 固定属于一个 Tier，按文件归类）：
+>
+> | 文件 / 小节 | Tier | 说明 |
+> | --- | --- | --- |
+> | `liuqin-liushen-leixiang.md` 第一节六亲基本类象 | **A** | 全节加载（含父母/兄弟/子孙/妻财/官鬼五大六亲） |
+> | `wuxing-shengke.md` 全文 | **B** | 旺衰/生克/纳音基础 |
+> | `yingqi-faze.md` 全文 | **B** | 应期法则 |
+> | `liuqin-liushen-leixiang.md` 第二节六亲组合类象 | **C** | 六亲组合（动爻/相邻/冲合） |
+> | `liuqin-liushen-leixiang.md` 第三节~第七节（六神各节） | **C** | 六神基本+组合+动爻口诀+六神×六亲+六神详述+六神×地支 |
+> | `bagua-leixiang.md` 全文 | **D** | 八卦万物类象 |
+> | `shier-dizhi-leixiang.md` 全文 | **D** | 地支万物类象 |
+> | `zonghe-yingyong-leixiang.md` 各节 | **E** | 场景类（求财/官讼/婚姻/疾病/调转工作升学/家宅） |
+> | `64-gua-yongfa.md` 各节 | **E** | 六十四卦应用（含阳宅灶门） |
+> | `te-shu-ge-ju.md` 全文 | **E** | 特殊格局详解 |
+> | `64-gua.md` 全文 | **E** | 六十四卦属性详表 |
+>
+> | 阶段 | 触发时机 | 必读范围（与本 intent 路由表行取交集） | 用途 |
+> | --- | --- | --- | --- |
+> | **Tier A·第零步附预读** | 第零步意图确认后立即 | 该 intent 路由表行中所有 Tier A 标记的项（必含 `liuqin 第一节六亲基本类象`，因所有 intent 均需识别用神） | 识别用神 |
+> | **Tier B·第二步前预读** | 进入第二步前 | 该 intent 路由表行中所有 Tier B 标记的项（`wuxing-shengke` / `yingqi-faze`） | 旺衰判定、应期 |
+> | **Tier C·第四步前预读** | 进入第四步前 | 该 intent 路由表行中所有 Tier C 标记的项 + `liuqin 第三节~第七节`（不论 intent 必加） | 六神类象断语 |
+> | **Tier D·第五步前预读** | 进入第五步前 | 该 intent 路由表行中所有 Tier D 标记的项（`bagua` / `shier-dizhi`） | 六神取象 |
+> | **Tier E·第七步前预读** | 进入第七步前 | 该 intent 路由表行中所有 Tier E 标记的项（`zonghe-yingyong-leixiang` 各节 / `64-gua-yongfa` / `te-shu-ge-ju` / `64-gua`） | 场景结论填写断语模板 |
+>
+> **执行要点**：
+> - **Tier A 必须在第零步附完成**：用神识别不能等
+> - **Tier B-E 在对应步骤的「🔌 Tier X 加载触发」块处完成**：每步开头清单需列明"本步新增加载的 Tier X 项"
+> - **跨阶段复用**：已加载的 references 后续步骤无需重复加载，但清单需注明"（第 X 步已加载）"
+> - **不得凭记忆替代**：每个 Tier 必须在进入对应步骤前完成预读，不得跳过
+> - **路由表交集规则**：若该 intent 路由表行未列某 Tier 的项（如感情 intent 未列 Tier B 的 wuxing-shengke），则该 Tier 跳过
+>
+> **跨 intent 合并规则**：当问题涉及多个 intent（如"老婆的病会影响胎儿吗"=健康+孕产），按以下优先级判定主 intent：
+> 1. **核心动词指向**：问"病"主 intent=健康，问"胎儿"主 intent=孕产——以问题的核心关注点（一句话里最后或最被强调的名词）为准
+> 2. **用神取法**：主 intent 决定用神（健康取子孙、孕产取子孙，若主 intent=健康则用神为子孙爻但场景语境包含孕产）
+> 3. **references 取并集**：主 intent 的必读项 + 相关 intent 中与用神/场景相关的条目（不必整个相关 intent 全读，只取用神对应部分）
+>
+> 示例：
+> - "老婆的病会影响胎儿吗" → 主 intent=健康（关注病），用神=子孙（健康+孕产都取子孙），Tier A 预读=`liuqin 第一节子孙爻`，Tier E 预读=健康 `zonghe 第五节`（无需额外加载孕产 `zonghe`，因子孙爻部分已在 Tier A）
+> - "买这套房对事业好吗" → 主 intent=阳宅（关注房），用神=父母（阳宅主用神），Tier A 预读=`liuqin 第一节父母爻`，Tier E 预读=`zonghe 第七节家宅` + `64-gua-yongfa 第六节阳宅灶门`
+>
+> 本路由表只管场景类/类象类 references；`jie-gua-xiang-jie.md` 各节仍由第一~第八步的「⛔ 强制加载」块按节点加载，不在此表。
+
+> 📌 **第八步 D 项校验判定标准**（铁律 15 的执行细则）：
+> - **"一致"定义**：本步清单 = 该步「⛔ 强制加载」要求 ∪ 路由表对应 Tier 预读集合 ∪ 历史步骤已加载且本步仍在用的项
+> - **多余 OK，缺失不行**：清单里多列（已加载但本步没用到）不算违规；少列（本步需要但没加载）必须补读后才能继续
+> - **分阶段一致性**：第零步附清单只需 Tier A；第二/四/五/七步清单需含对应 Tier B/C/D/E 项
+> - **⛔ 关键句摘录必查**：每个清单项必须有 1-2 句关键内容摘录（不只是文件名+小节号）。若发现"只写文件名无摘录"的清单项 → 判定为"假合规"，必须回退到该步重新真读后再摘录
+
+| intent | 必读场景类/类象类 references（精确到小节） |
+| --- | --- |
+| 求财 | `zonghe-yingyong-leixiang.md` 第二节求财 + `liuqin-liushen-leixiang.md` 第一节妻财爻/第二节妻财爻组合 + `wuxing-shengke.md` 第七节旺相休囚死/第八节纳音 + `yingqi-faze.md` |
+| 官运 | `liuqin-liushen-leixiang.md` 第一节官鬼爻/第二节官鬼爻组合 + `zonghe-yingyong-leixiang.md` 第六节调转工作 + `yingqi-faze.md` |
+| 学业 | `liuqin-liushen-leixiang.md` 第一节父母爻/第二节父母爻组合 + `zonghe-yingyong-leixiang.md` 第六节升学 |
+| 感情 | `zonghe-yingyong-leixiang.md` 第四节婚姻 + `liuqin-liushen-leixiang.md` 第二节妻财爻组合/官鬼爻组合 + `te-shu-ge-ju.md`（六合六冲对婚姻影响） |
+| 健康 | `zonghe-yingyong-leixiang.md` 第五节疾病 + **`bagua-leixiang.md` 全文（重点查各卦『身体』维度行定位病灶）** + **`shier-dizhi-leixiang.md` 全文（重点查各地支『人体』『疾病』维度）** + `liuqin-liushen-leixiang.md` 第一节官鬼爻/第二节官鬼爻组合 + `wuxing-shengke.md` 第七节旺相休囚死 |
+| 孕产 | `liuqin-liushen-leixiang.md` 第一节子孙爻/第二节子孙爻组合 + `zonghe-yingyong-leixiang.md` + `wuxing-shengke.md` |
+| 出行 | `zonghe-yingyong-leixiang.md` 第一节车辆 + `liuqin-liushen-leixiang.md` 第一节父母爻（车船类）+ `yingqi-faze.md` |
+| 失物 | `bagua-leixiang.md` 全文 + `shier-dizhi-leixiang.md` 全文 + `liuqin-liushen-leixiang.md` 第三节六神基本（玄武）/第六节六神万物类象详述（玄武） + `yingqi-faze.md` |
+| 寻人 | `bagua-leixiang.md` 全文 + `shier-dizhi-leixiang.md` 全文 + `liuqin-liushen-leixiang.md` 第三节六神基本（玄武、腾蛇）/第六节六神万物类象详述（玄武、腾蛇） + `yingqi-faze.md` |
+| 词讼 | `zonghe-yingyong-leixiang.md` 第三节官讼 + `liuqin-liushen-leixiang.md` 第一节官鬼爻/父母爻 + 第二节官鬼爻组合 |
+| 阳宅 | `zonghe-yingyong-leixiang.md` 第七节家宅 + **`64-gua-yongfa.md` 第六节阳宅灶门** + `bagua-leixiang.md`（方位）+ `64-gua.md`（卦宫属性） |
+| 天气 | `bagua-leixiang.md` 全文 + `shier-dizhi-leixiang.md` 全文 |
+| 通用 | `liuqin-liushen-leixiang.md` 第一节六亲基本类象（六亲全）+ `bagua-leixiang.md` 全文（八卦万物类象基础）+ `shier-dizhi-leixiang.md` 全文（地支万物类象基础）+ `yingqi-faze.md`（应期法则兜底） |
+
+> ⛔ **铁律 14·路由表优先·分阶段预读**：第零步意图确认后，必须立即查本路由表确定本次 intent 需要的 references 全集，但按 Tier A→E 分阶段预读（Tier A 在第零步附立即加载；Tier B 在第二步前、Tier C 在第四步前、Tier D 在第五步前、Tier E 在第七步前分别加载）。跨 intent 问题取并集。不得凭记忆替代，不得跳过任何 Tier。
+>
+> ⛔ **铁律 15·每步自检门禁**：每一步开头必须显式输出「**本步已加载 references 清单**」（含文件名 + 小节号 + 关键句摘录），再开始执行该步分析。未输出清单 = 步骤无效，第八步校验会直接判失败回退。清单需与本步「⛔ 强制加载」要求 + 路由表对应 Tier 预读结果一致。
+
+**📤 强制输出（第零步附·Tier A 预读清单）**：
+
+```
+【第零步附·输出】
+- 本次 intent：[主 intent，如"健康"；跨 intent 写"健康+孕产"]
+- 本次路由表全集：[列出该 intent 路由表行的所有 references 项，标注各 Tier]
+- Tier A 已预读 references 清单（含关键句摘录，证明已真读）：
+  - [文件名] [章节号][章节名]：「[1-2 句核心内容摘录，如"乾卦身体对应首/肺，疾病对应头胸肺疾"]」
+  - [文件名] [章节号][章节名]：「[摘录]」
+  - ...
+- 待加载 Tier 提醒：
+  - Tier B（第二步前）：[如 wuxing-shengke 第七节 + yingqi-faze]
+  - Tier C（第四步前）：[如 liuqin 第三节~第七节六神部分]
+  - Tier D（第五步前）：[如 bagua 全文 + shier-dizhi 全文，视 intent]
+  - Tier E（第七步前）：[如 zonghe 第五节疾病]
+- 跨 intent 合并说明（若有）：[如"主 intent=健康，合并孕产的 liuqin 第一节子孙爻"]
+```
+
+> 📁 落地：将此预读清单追加写入 `{卦例目录}/步骤0-自动排盘.md` 末尾（同一文件，不另建）。后续每步开头的「本步已加载 references 清单」需对照本清单的 Tier 分工一致性。
+
 ---
 
 ### 第一步：审题取用神
@@ -198,7 +319,7 @@ kong_wang: 是否旬空 (true/false)
 
 > 📁 卦例目录已在第零步创建并重命名，`{卦例目录}` 指向最终目录（如 `~/Desktop/26.07.08-地火明夷-工作/`）。所有步骤输出直接写入此目录，无需重新创建。
 
-> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第一节（intent→用神映射表 + 16条核心原则全文）。
+> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 顶部独立的「**16条核心原则（全文）**」章节 + 「第一节：审题取用神」（intent→用神映射表 + 用神定位要点）。
 
 按 intent 映射表确定主用神和辅助用神，遍历全卦爻位查找用神是否明现。
 
@@ -206,6 +327,10 @@ kong_wang: 是否旬空 (true/false)
 
 ```
 【第一步·输出】
+- 本步已加载 references 清单（含关键句摘录）：
+  - [第零步路由表预读项，如 bagua-leixiang.md 全文]：「[摘录核心句，如"乾对应首/肺/天/君王"]」
+  - [第零步路由表预读项，如 liuqin-liushen-leixiang.md 第一节官鬼爻]：「[摘录]」
+  - jie-gua-xiang-jie.md 16条核心原则+第一节审题取用神：「[摘录核心原则，如"原则1：用神为纲"]」
 - intent 类别：[值]
 - 主用神六亲：[值]
 - 辅助用神六亲：[值]
@@ -222,6 +347,8 @@ kong_wang: 是否旬空 (true/false)
 ### 第二步：判定用神旺衰
 
 **⛔ 准入条件**：第一步强制输出已完整，用神已定位到具体爻（或确认不现）。
+
+> 🔌 **Tier B 加载触发**（铁律 14 执行点）：进入第二步前必须加载 Tier B references——若第零步附路由表全集包含 `wuxing-shengke 第七节旺相休囚死` 和/或 `yingqi-faze`，则在此处加载。本步开头清单需列明"本步新增加载的 Tier B 项"。
 
 > **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第二节（旺衰判定规则 + 暗动/日破判定要点 + 空破法则）。若用神 kong_wang=true 或与 month_branch 相冲或被 ri_chen 冲 → 额外加载 `references/dong-bian-fa-ze.md` 第二、四节。
 
@@ -249,12 +376,14 @@ kong_wang: 是否旬空 (true/false)
 
 **⛔ 准入条件**：第二步强制输出已完整，用神旺衰判定已明确。
 
-> **⛔ 强制加载**：
+> **⛔ 强制加载**：（完整条件参见文末「参考资料加载规则·强制触发条件表」，本块为步骤内执行复述）
 >
 > - 卦中存在**任何** dong:true 的爻 → **必须**加载 `references/dong-bian-fa-ze.md`（全部章节）
 > - **必须**加载 `references/jie-gua-xiang-jie.md` 第三节（动变角色+变化判定+多爻联动规则）
 > - JSON `patterns` 字段中存在 dizhi_liuhe / dizhi_liuchong / sanhui_ju 非空 → **必须**加载 `references/di-zhi-relations.md`
 > - JSON `patterns` 字段中 ben_liuchong_gua / ben_liuhe_gua=true 或 fuyin/fanyin 非空或 dufa/dujing=true → **必须**加载 `references/te-shu-ge-ju.md`
+> - JSON `patterns` 字段中 `ben_you_hun` / `ben_gui_hun` / `bian_you_hun` / `bian_gui_hun` 任一为 true → **必须**加载 `references/64-gua.md`（确认本卦/变卦的八宫、世爻位、六合/六冲/游魂/归魂属性）
+> - intent=阳宅 → **必须**加载 `references/64-gua.md`（卦宫属性是阳宅断的基础）
 
 > 💡 **特殊格局直接读 JSON**：第零步 `paipan.py` 已自动检测以下格局并写入 `patterns` 字段。Agent **不得再手动识别**，直接引用 JSON 数据做解读：
 > - `sanhui_ju`：三会局（含成局/虚势判定）
@@ -262,6 +391,7 @@ kong_wang: 是否旬空 (true/false)
 > - `fuyin_positions` / `fanyin_positions`：伏吟/反吟动爻位
 > - `dufa` / `dujing`：独发/独静
 > - `ben_liuchong_gua` / `ben_liuhe_gua`：本卦是六冲卦/六合卦
+> - `ben_you_hun` / `ben_gui_hun` / `bian_you_hun` / `bian_gui_hun`：本卦/变卦是游魂卦/归魂卦
 > - `dong_count`：动爻总数
 
 全静卦则仅输出"静卦，无动变"，跳过。有动爻则逐爻定角色→看变化→画生克链条。三合局优先于单爻生克。
@@ -312,7 +442,7 @@ kong_wang: 是否旬空 (true/false)
 - 一句话提醒：[如"伏官鬼于妻财之下，对方可能有隐而未言的矛盾"]
 ```
 
-> ⛔ 此步不进入第3.5步的完整飞伏分析，不替代用神。第七步综合断语必须引用此旁注，权重不低于六兽提点。
+> ⛔ 此步不进入第3.5步的完整飞伏分析，不替代用神。第七步综合断语必须引用此旁注，权重不低于六神提点。
 
 > 📁 落地：写入 `{卦例目录}/步骤3附-伏神旁注.md`
 
@@ -347,6 +477,8 @@ kong_wang: 是否旬空 (true/false)
 
 **⛔ 准入条件**：第三步（及第3.5步，若执行）强制输出已完整。
 
+> 🔌 **Tier C 加载触发**（铁律 14 执行点）：进入第四步前必须加载 Tier C references——`liuqin-liushen-leixiang.md` 第三节六神基本 / 第四节六神动爻口诀 / 第五节六神+六亲 / 第六节六神详述 / 第七节六神×地支（不论 intent 均需加载，六神类象断语为通用知识）。本步开头清单需列明"本步新增加载的 Tier C 项"。
+
 > **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第四节（世应关系表+刑害速判）。若世应存在相刑或相害 → 额外加载 `references/di-zhi-relations.md` 刑害判定部分。
 
 按生克冲合+旬空+刑害三个维度综合判定世应格局。
@@ -369,28 +501,34 @@ kong_wang: 是否旬空 (true/false)
 
 ---
 
-### 第五步：六兽取象
+### 第五步：六神取象
 
 **⛔ 准入条件**：第四步强制输出已完整。
 
-> ⛔ **绝对约束**：六兽不能单独断吉凶，不得以六兽取象逆转前面的旺衰/动变结论。
+> 🔌 **Tier D 加载触发**（铁律 14 执行点）：进入第五步前必须加载 Tier D references——若第零步附路由表全集包含 `bagua-leixiang.md` 和/或 `shier-dizhi-leixiang.md`，则在此处加载。本步开头清单需列明"本步新增加载的 Tier D 项"。
 
-> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第五节（六兽吉凶象表）。**若 intent 为「失物」「寻人」「天气」等需精确定位物品/人物的类别 → 必须额外加载 `references/bagua-leixiang.md` 和 `references/shier-dizhi-leixiang.md` 全文**，不得凭记忆取象。
+> ⛔ **绝对约束**：六神不能单独断吉凶，不得以六神取象逆转前面的旺衰/动变结论。
 
-仅对用神和动爻做六兽修饰分析。
+> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第五节（六神吉凶象表）。如需精细类象 → 额外加载 `references/liuqin-liushen-leixiang.md` 六神类象部分。**若 intent 为「失物」「寻人」「天气」「健康」「阳宅」 → 必须额外加载 `references/bagua-leixiang.md` 和 `references/shier-dizhi-leixiang.md` 全文**，不得凭记忆取象：
+> - 失物/寻人：取物品形状材质/人物特征方位
+> - 健康：取人体部位（bagua 人体对应 + shier-dizhi 人体对应）定位病灶
+> - 阳宅：取方位 + 人体对应（宅人关系）
+> - 天气：取天气象意
+
+仅对用神和动爻做六神修饰分析。
 
 **📤 强制输出**：
 
 ```
 【第五步·输出】
-- 用神所临六兽：[X兽] → 修饰：[吉象/凶象]，含义：[1句]
-- 动爻所临六兽（逐爻）：X爻(动爻) 临 [X兽] → [吉象/凶象]，含义：[1句]
-- 其他关注：[世/应爻临特殊六兽时点出]
+- 用神所临六神：[X兽] → 修饰：[吉象/凶象]，含义：[1句]
+- 动爻所临六神（逐爻）：X爻(动爻) 临 [X兽] → [吉象/凶象]，含义：[1句]
+- 其他关注：[世/应爻临特殊六神时点出]
 ```
 
-> 📁 落地：写入 `{卦例目录}/步骤5-六兽取象.md`
+> 📁 落地：写入 `{卦例目录}/步骤5-六神取象.md`
 
-**✅ 检查点**：仅对用神+动爻分析？有无六兽解读逆转了前面吉凶？世应六兽是否提及？
+**✅ 检查点**：仅对用神+动爻分析？有无六神解读逆转了前面吉凶？世应六神是否提及？
 
 ---
 
@@ -425,7 +563,9 @@ kong_wang: 是否旬空 (true/false)
 
 **⛔ 准入条件**：第一至六步全部完成。
 
-> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第七节（完整输出模板 + 填写要求）。
+> 🔌 **Tier E 加载触发**（铁律 14 执行点）：进入第七步前必须加载 Tier E references——`zonghe-yingyong-leixiang.md` 中本 intent 对应小节 + `64-gua-yongfa.md`（阳宅 intent 时）+ `te-shu-ge-ju.md`（感情 intent 或涉及六合六冲时）。本步开头清单需列明"本步新增加载的 Tier E 项"。
+
+> **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第七节（完整输出模板 + 填写要求）。**并确认** intent 路由表中列出的 `zonghe-yingyong-leixiang.md` 小节已在第零步预读——**若未读则立即补读**。把场景结论填入断语模板，不得跳过。
 
 严格按模板逐段输出，所有占位符必须填入实际内容，不得留空。每条结论必须可回溯到前六步的具体输出。语气半文半白。
 
@@ -443,7 +583,7 @@ kong_wang: 是否旬空 (true/false)
 
 > **⛔ 强制加载**：**必须**加载 `references/jie-gua-xiang-jie.md` 第八节（步骤完整性检查表 + 交叉验证规则 + 16条原则映射表）。
 
-> 💡 **16 条核心原则速查表**（内联于此，校验时直接对照；详细解释见 `references/jie-gua-xiang-jie.md` 第一节）：
+> 💡 **16 条核心原则速查表**（内联于此，校验时直接对照；详细解释见 `references/jie-gua-xiang-jie.md` 顶部独立的「16条核心原则（全文）」章节）：
 >
 > | # | 原则 | 速查要点 |
 > |---|------|---------|
@@ -483,6 +623,10 @@ B. 一致性交叉验证（逐条）：
 C. 16条原则检查：
   全部通过：[是/否]
   未通过项：[编号+问题+修正措施]
+D. references 清单一致性（「每步自检门禁」铁律校验）：
+  各步开头是否均输出「本步已加载 references 清单」：[是/否]
+  各步清单是否与该步「⛔ 强制加载」要求一致：[一致/⚠️缺失...已回退补读]
+  第零步路由表预读清单是否完整执行：[完整/⚠️遗漏...已回退补读]
 
 最终结论：校验 [通过 / 存在X项问题已全部修正可交付]
 ```
@@ -503,12 +647,24 @@ C. 16条原则检查：
 
 1. **从本地 md 文件读取前八步输出**：遍历 `{卦例目录}/` 下的 `步骤N-*.md` 文件，读取内容作为构建 JSON 的**唯一数据源**（不得仅凭对话记忆）
 2. 按 `html-report-guide.md` 的 JSON schema 将读取到的内容整理为结构化 JSON
+
+   > ⛔ **致命陷阱：跳过组装直接跑脚本 = 空报告。**
+   >
+   > 当你把第零步产出的 `paipan_result.json`（扁平格式）直接传给 `generate_report.py` 时，脚本的自动适配代码会填入占位文本——`"此报告仅含排盘信息，未做解卦分析。"`——整个报告看起来有卦象面板但解卦区块全是空的。
+   >
+   > **为什么这一步不能跳过**：九步解卦的分析内容散落在 `步骤N-*.md` 文件中，而 `generate_report.py` 需要「一步不落 + 一字段不空」的 `steps` 对象。这两者之间没有任何自动化桥梁——**你必须手工搭这座桥**：
+   > 1. 从每个 `步骤N-*.md` 文件中提取分析结论
+   > 2. 按 `html-report-guide.md` 的 `step1`~`step8` schema 逐字段填入
+   > 3. 写入 `liuyao-data.json`（非 `paipan_result.json`）
+   >
+   > **跳过组装 = 步骤 4 的 `--validate` 会将你拦截下来**（见下方校验描述）。这不是「可选的 nice-to-have」——**这是第九步唯一正确的进入方式**。
+
 3. 将 JSON 写入 `{卦例目录}/liuyao-data.json`
 4. **写入后立即校验 JSON schema 完整性**（必须执行，不可跳过）：
    ```bash
    python <skill_dir>/scripts/generate_report.py -i "{卦例目录}/liuyao-data.json" --validate
    ```
-   > ⛔ 校验逻辑统一收敛到 `generate_report.py --validate` 子命令，**禁止在 SKILL.md 中写 inline Python heredoc**（跨平台引号转义易出错，且 schema 演进要改两处）。`--validate` 模式检查 `meta`/`yao`/`steps` 顶层域 + `step1`~`step8` 齐全 + `step5` 四个六兽字段 + 每爻 `ben_yin_yang`。
+   > ⛔ 校验逻辑统一收敛到 `generate_report.py --validate` 子命令，**禁止在 SKILL.md 中写 inline Python heredoc**（跨平台引号转义易出错，且 schema 演进要改两处）。`--validate` 模式检查 `meta`/`yao`/`steps` 顶层域 + `step1`~`step8` 齐全 + `step5` 四个六神字段 + 每爻 `ben_yin_yang` + **🚨 占位内容检测**（若 step1.note 含"未做解卦分析"、step7.final_verdict 含"未做解卦分析"等占位文本 → 报错阻断）。
    若校验失败（exit code=1），**不得继续**——先修正 JSON 中缺失的字段，重新校验通过后再进入步骤5。
 5. 调用本地 Python 脚本生成 HTML：
    ```bash
@@ -547,6 +703,8 @@ C. 16条原则检查：
 ## 参考资料加载规则
 
 > ⛔ **强制加载优先于按需加载**：满足触发条件时必须加载对应文件并严格使用。不得凭记忆替代。
+>
+> 📌 **本节是加载条件的单一权威表**。其他章节（如第三步强加载块、第零步附路由表、第零步输出块提示等）出现的加载条件都是本表的引用或语境化复述——若改动加载条件，以本表为源点同步其他处。
 
 ### 强制触发条件表
 
@@ -564,19 +722,26 @@ C. 16条原则检查：
 | 进入第四步 | `references/jie-gua-xiang-jie.md` | 第四节 |
 | 世应相刑/相害 | `references/di-zhi-relations.md` | 刑害判定 |
 | 进入第五步 | `references/jie-gua-xiang-jie.md` | 第五节 |
-| 进入第五步且 intent 为失物/寻人/天气 | `references/bagua-leixiang.md` + `references/shier-dizhi-leixiang.md` | 全文（八卦万物类象+地支类象，精确定位物品/人物不可省略） |
+| 进入第五步且 intent 为失物/寻人/天气/健康/阳宅 | `references/bagua-leixiang.md` + `references/shier-dizhi-leixiang.md` | 全文（八卦万物类象+地支类象，精确定位物品/人物/病灶/方位不可省略） |
 | 进入第六步 | `references/jie-gua-xiang-jie.md` | 第六节 |
 | 高级应期（合处逢冲等） | `references/yingqi-faze.md` | 全部 |
 | 应期需地支合冲推算 | `references/di-zhi-relations.md` | 合冲速查 |
 | 进入第七步 | `references/jie-gua-xiang-jie.md` | 第七节 |
+| intent 对应生活场景（zonghe 小节已在第零步路由表预读） | `references/zonghe-yingyong-leixiang.md` | 对应场景；若第零步未预读则第七步必须补读 |
+| JSON patterns.ben_you_hun/ben_gui_hun/bian_you_hun/bian_gui_hun=true | `references/64-gua.md` | 卦宫/世爻位/六合六冲游魂归魂属性 |
+| intent=阳宅 | `references/64-gua-yongfa.md` | 第六节阳宅灶门断法 |
 | 进入第八步 | `references/jie-gua-xiang-jie.md` | 第八节（16条原则速查表见 SKILL.md 第八步内联） |
 | 进入第九步 | `references/html-report-guide.md` | 全部 |
 
 ### 按需加载（无强触发时可选）
 
+> ℹ️ 以下文件已升级为「第零步路由表预读」或「步骤强触发」机制。仅当 intent 未命中路由表、且无强触发条件满足时，才作为按需加载使用。
+
 | 场景 | 文件 |
 | --- | --- |
-| 五行生克/六亲推导/六十甲子纳音 | `references/wuxing-shengke.md` |
-| 六十四卦八宫/世爻位/游魂归魂 | `references/64-gua.md` |
-| 八卦/十二地支万物类象 | `references/bagua-leixiang.md` / `references/shier-dizhi-leixiang.md` |
+| 五行生克/六亲推导/六十甲子纳音（求财/健康/孕产 intent 已在第零步路由表预读） | `references/wuxing-shengke.md` |
+| 六十四卦八宫/世爻位/游魂归魂（游魂/归魂/阳宅 intent 已升级为强触发） | `references/64-gua.md` |
+| 八卦/十二地支万物类象（失物/寻人/天气/健康/阳宅 intent 已升级为强触发） | `references/bagua-leixiang.md` / `references/shier-dizhi-leixiang.md` |
+| 六十四卦爻象/阳宅灶门（阳宅 intent 已升级为强触发） | `references/64-gua-yongfa.md` |
+| 六亲/六神精细类象（大部分 intent 已在第零步路由表预读） | `references/liuqin-liushen-leixiang.md` |
 | HTML 报告样式调试 | `references/html-report-guide.md` |

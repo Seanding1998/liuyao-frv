@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""六爻卦象 HTML 报告生成器 v1.5。
+"""六爻卦象 HTML 报告生成器 v1.4。
 
 新增:
 - 本卦/变卦/互卦 三栏盘面展示
@@ -787,6 +787,26 @@ def validate_json(data):
         for i, y in enumerate(data["yao"]):
             if "ben_yin_yang" not in y:
                 errors.append(f"yao[{i}] 缺少 ben_yin_yang（卦象面板会全错）")
+
+    # ── 占位内容检测（防"空报告"——paipan 扁平格式自动适配时填入的占位文本）──
+    PLACEHOLDER_SIGNATURES = {
+        "step1.note": "未做解卦分析",
+        "step2.verdict": "未分析（仅盘面）",
+        "step7.final_verdict": "未做解卦分析",
+        "step7.qualitative": "盘面报告",
+        "step8.final": "仅盘面，未校验",
+    }
+    if "steps" in data:
+        s = data["steps"]
+        for key, sig in PLACEHOLDER_SIGNATURES.items():
+            step_name, field = key.split(".")
+            val = s.get(step_name, {}).get(field, "") if step_name in s else ""
+            if sig in str(val):
+                errors.append(
+                    f"{key} 仍是占位文本（含 '{sig}'），"
+                    f"未注入真实解卦内容。请回到第九步：必须先按 html-report-guide.md "
+                    f"schema 从步骤 md 文件组装完整 JSON，再跑 --validate。"
+                )
 
     return (len(errors) == 0, errors)
 
