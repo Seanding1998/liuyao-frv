@@ -1,3 +1,11 @@
 __pycache__/
 *.py[cod]
+*.pyo
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
 paipan_result.json
+liuyao-data.json
+liuyao-report.html
