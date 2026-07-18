@@ -97,6 +97,42 @@ DIZHI_SANHE_GROUPS = [
 ]
 
 
+# ── 八宫规则推断游魂/归魂（方案 C：不依赖 GUA64 第 10 列标签）──
+# 八宫变化：纯(6世)→一世→二世→三世→四世(4爻变)→五世(5爻变)→游魂(4爻回退+下卦变反宫)→归魂(下卦回本宫)
+# 关键区分：游魂=世4应1+4爻=纯卦4爻(回退了)；四世=世4应1+4爻≠纯卦4爻
+#          归魂=世3应6+5爻≠纯卦5爻(五世保留了变化)；三世=世3应6+5爻=纯卦5爻
+
+def _build_pure_guastr():
+    """从 GUA64 表读取八纯卦 guastr（世爻=6）→ {宫名: guastr}"""
+    return {v[10]: k for k, v in GUA64.items() if v[6] == 6}
+
+
+_PURE_GUASTR = None  # lazy init after GUA64 is defined
+
+
+def _infer_you_gui_hun(gua_name, gong_name, shi, ying, guastr):
+    """用八宫变化规则推断游魂/归魂（不依赖 GUA64 第 10 列字符串标签）。
+
+    规则：
+    - 游魂 = 世4应1 + 4爻=纯卦4爻（回退到纯卦状态）
+    - 归魂 = 世3应6 + 5爻≠纯卦5爻（五世的变化被保留）
+    返回 (is_you_hun: bool, is_gui_hun: bool)。
+    """
+    global _PURE_GUASTR
+    if _PURE_GUASTR is None:
+        _PURE_GUASTR = _build_pure_guastr()
+    pure = _PURE_GUASTR.get(gong_name, "")
+    if not pure or len(guastr) != 6:
+        return False, False
+    yao4_back = (guastr[3] == pure[3])   # 4爻已回退→游魂候选
+    yao5_changed = (guastr[4] != pure[4])  # 5爻保留变化→归魂候选
+    if shi == 4 and ying == 1:
+        return (yao4_back, False)
+    if shi == 3 and ying == 6:
+        return (False, yao5_changed)
+    return False, False
+
+
 def _liuqin_by_gong(gong_wuxing, yao_wuxing):
     """按本卦宫五行定爻的六亲（传统本卦宫法）"""
     if yao_wuxing == gong_wuxing:
@@ -112,67 +148,68 @@ def _liuqin_by_gong(gong_wuxing, yao_wuxing):
     return "?"
 
 
-def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen=""):
+def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen="",
+                    ben_you_hun=False, ben_gui_hun=False,
+                    bian_you_hun=False, bian_gui_hun=False):
     """特殊格局自动检测（规则化判断，非 AI 手动识别）
 
     从 lines 数据自动推断三会局 / 三合局 / 地支六合 / 地支六冲 / 伏吟 / 反吟 /
-    独发 / 独静 / 本卦六冲卦 / 本卦六合卦。此函数是格局检测的唯一权威来源——
+    独发 / 独静 / 本卦六冲卦 / 本卦六合卦。游魂/归魂由 _infer_you_gui_hun()
+    用八宫变化规则推断后传入（不再依赖 GUA64 第 10 列字符串标签）。
     SKILL.md 第三步应直接读取 JSON 的 patterns 字段，不再让 AI 手动识别。
 
     参数：
       lines:          build_paipan_data 产出的 lines 数组
-      ben_gua_attr:   本卦属性（"六冲"/"六合"/""/None）
-      bian_gua_attr:  变卦属性
-      month_branch:   月建地支（用于判断日月补字）
-      ri_chen:         日辰地支（用于判断日月补字）
+      ben_gua_attr:   本卦属性中文字符串（六合/六冲标记，不再用于游魂归魂判定）
+      bian_gua_attr:  变卦属性，同上
+      month_branch:   月建地支（用于判断日月补字 / 日月引动）
+      ri_chen:         日辰地支（用于判断日月补字 / 日月引动）
+      ben_you_hun:    本卦游魂 bool（build_paipan_data 规则推断传入）
+      ben_gui_hun:    本卦归魂 bool（同上）
+      bian_you_hun:   变卦游魂 bool（同上，无变卦时为 False）
+      bian_gui_hun:   变卦归魂 bool（同上，无变卦时为 False）
 
     返回 dict。
-
-    三会局状态：
-      严格成局：三支都动（或两动+日月补第三字）
-      三会之势：三支俱全 + 含动爻但不满足严格条件
-      虚势：    三支俱全但全静
-
-    三合局状态：
-      成局：三字全现 + 至少一字动（或二字+日月补缺字且含动）
-      半合：二字现 + 含动爻（标 subtype：长生帝旺/帝旺墓库/长生墓库）
-      虚合：三字全现但全静
     """
     dizhi_list = [l["di_zhi"] for l in lines]
     dizhi_set = set(dizhi_list)
     dong_lines = [l for l in lines if l["dong"]]
     dong_count = len(dong_lines)
+    dong_set = {l["di_zhi"] for l in dong_lines}
 
-    # ── 三会局：3 档（严格成局/三会之势/虚势）──
+    # ── 三会局：3 档（严格成局 / 三会之势 / 虚势）──
     sanhui = []
     for group in DIZHI_SANHUI_GROUPS:
         present = [dz for dz in group if dz in dizhi_set]
         if len(present) != 3:
             continue
+        # 该组三支在卦中的爻位
         group_lines = [l for l in lines if l["di_zhi"] in group]
         dong_positions = [l["pos"] for l in group_lines if l["dong"]]
-        static_positions = [l["pos"] for l in group_lines if not l["dong"]]
-        kong_positions = [l["pos"] for l in group_lines if l.get("kong_wang")]
         sun_moon_in_group = (month_branch in group) or (ri_chen in group)
-        # 严格成局：3 动 / 2 动 + 日月补 1 静
+        kong_positions = [l["pos"] for l in group_lines if l.get("kong_wang")]
+
         if len(dong_positions) == 3:
             status = "严格成局"
         elif len(dong_positions) == 2 and sun_moon_in_group:
-            status = "严格成局"
+            status = "严格成局"  # 两动 + 日月补第三字
         elif len(dong_positions) >= 1:
+            status = "三会之势"
+        elif sun_moon_in_group and len(dong_positions) == 0:
+            # 三支全静但日月在该组——仍只作"势"，不能成局（与会局不同）
             status = "三会之势"
         else:
             status = "虚势"
+
         sanhui.append({
             "group": "".join(group),
             "status": status,
             "dong_positions": dong_positions,
-            "static_positions": static_positions,
             "kong_positions": kong_positions,
             "sun_moon_in_group": sun_moon_in_group,
         })
 
-    # ── 三合局：3 档（成局/半合/虚合）+ 日月补字 ──
+    # ── 三合局：3 档 + 日月引动 + 半合子型 ──
     sanhe = []
     for g0, g1, g2, wx in DIZHI_SANHE_GROUPS:
         group_tuple = (g0, g1, g2)
@@ -182,7 +219,6 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
         dong_positions = [l["pos"] for l in group_lines if l["dong"]]
         kong_positions = [l["pos"] for l in group_lines if l.get("kong_wang")]
         has_dong = bool(dong_positions)
-        # 日月补缺字（只补一字）
         sun_moon_fills = (
             len(missing_in_gua) == 1
             and missing_in_gua[0] in (month_branch, ri_chen)
@@ -268,15 +304,12 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
     dufa = (dong_count == 1)
     dujing = (dong_count == 5)
 
-    # ── 本卦 / 变卦属性（六合卦、六冲卦、游魂、归魂）──
+    # ── 本卦 / 变卦属性（六合卦、六冲卦）──
+    # 游魂/归魂 bool 由 build_paipan_data 调用 _infer_you_gui_hun() 规则推断传入
     ben_attr = ben_gua_attr or ""
     bian_attr = bian_gua_attr or ""
     ben_liuchong_gua = "六冲" in ben_attr
     ben_liuhe_gua = "六合" in ben_attr
-    ben_you_hun = "游魂" in ben_attr
-    ben_gui_hun = "归魂" in ben_attr
-    bian_you_hun = "游魂" in bian_attr
-    bian_gui_hun = "归魂" in bian_attr
 
     return {
         "sanhui_ju": sanhui,
@@ -1080,6 +1113,10 @@ class LiuYaoPaipan:
             main_gua_attr = (main_gua_attr + " " if main_gua_attr else "") + main_gua_arr[9]
         shi_yao_pos = main_gua_arr[6]   # 1-6
         ying_yao_pos = main_gua_arr[7]  # 1-6
+        ben_gua_gong = main_gua_arr[10]
+        # 方案 C：游魂/归魂用八宫变化规则推断（不再读 main_gua_arr[9] 标签）
+        ben_you_hun, ben_gui_hun = _infer_you_gui_hun(
+            main_gua_arr[11], ben_gua_gong, shi_yao_pos, ying_yao_pos, guastr)
 
         # 3. 计算变卦键
         bbgua = [int(x) for x in gua]
@@ -1099,11 +1136,15 @@ class LiuYaoPaipan:
             if bian_gua_arr[9]:
                 bian_gua_attr = (bian_gua_attr + " " if bian_gua_attr else "") + bian_gua_arr[9]
             bian_gua_gong = bian_gua_arr[10]
+            # 方案 C：变卦游魂/归魂规则推断
+            bian_you_hun, bian_gui_hun = _infer_you_gui_hun(
+                bian_gua_arr[11], bian_gua_gong, bian_gua_arr[6], bian_gua_arr[7], bguastr)
         else:
             bian_gua_arr = None
             bian_gua_name = None
             bian_gua_attr = None
             bian_gua_gong = None
+            bian_you_hun, bian_gui_hun = False, False
 
         # 4. 动爻标记（按爻位索引 0-5）
         dong_set = {}
@@ -1160,7 +1201,7 @@ class LiuYaoPaipan:
                         "wu_xing": b_wx,
                     }
 
-            # 六兽：自下而上排列（初爻得起始神，依次至上爻）
+            # 六神：自下而上排列（初爻得起始神，依次至上爻）
             # 日干甲乙起青龙、丙丁起朱雀、戊起勾陈、己起腾蛇、庚辛起白虎、壬癸起玄武
             # 初爻 i=0 得起始索引 liushen_start，每上一爻 +1，模 6 循环
             ls_idx = (liushen_start + i) % 6
@@ -1230,7 +1271,9 @@ class LiuYaoPaipan:
             "ygua": "".join(ygua),
             "lines": lines,
             "patterns": detect_patterns(lines, main_gua_attr, bian_gua_attr,
-                                       gz["month_branch"], gz["ri_zhi"]),
+                                       gz["month_branch"], gz["ri_zhi"],
+                                       ben_you_hun, ben_gui_hun,
+                                       bian_you_hun, bian_gui_hun),
             "seed": seed,
         }
 

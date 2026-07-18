@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paipan import (
     GUA64,
     detect_patterns,
+    _infer_you_gui_hun,
     DIZHI_LIUHE_PAIRS,
     DIZHI_LIUCHONG_PAIRS,
     DIZHI_SANHUI_GROUPS,
@@ -65,12 +66,14 @@ def test_gua64_table(failures):
         gua_name = f"{entry[10]}-{entry[11]}"
         attr = build_attr_from_gua_entry(entry)
 
-        expected_you_hun = "游魂" in (entry[9] or "")
-        expected_gui_hun = "归魂" in (entry[9] or "")
+        # 方案 C：游魂/归魂用规则推断（不再从 attr 子串匹配）
+        rule_you, rule_gui = _infer_you_gui_hun(
+            entry[11], entry[10], entry[6], entry[7], gua_key)
         expected_liuhe = "六合" in (entry[8] or "")
         expected_liuchong = "六冲" in (entry[8] or "")
 
-        result = detect_patterns([], attr, "")
+        result = detect_patterns([], attr, "",
+                                ben_you_hun=rule_you, ben_gui_hun=rule_gui)
         actual_you_hun = result["ben_you_hun"]
         actual_gui_hun = result["ben_gui_hun"]
         actual_liuhe = result["ben_liuhe_gua"]
@@ -86,8 +89,8 @@ def test_gua64_table(failures):
             stats["liuchong_gua"] += 1
 
         checks = [
-            ("ben_you_hun", expected_you_hun, actual_you_hun),
-            ("ben_gui_hun", expected_gui_hun, actual_gui_hun),
+            ("ben_you_hun", rule_you, actual_you_hun),
+            ("ben_gui_hun", rule_gui, actual_gui_hun),
             ("ben_liuhe_gua", expected_liuhe, actual_liuhe),
             ("ben_liuchong_gua", expected_liuchong, actual_liuchong),
         ]
