@@ -681,6 +681,13 @@ def generate(data: dict, output_path: str) -> str:
     s7 = steps["step7"]
     s8 = steps["step8"]
 
+    # 合并空亡：若 meta 中存在 yue_kong 或 yue_xunkong 但 kong_wang 未包含月空，则自动合并
+    _kong = meta.get("kong_wang", "")
+    _yue_kong = meta.get("yue_kong", "") or meta.get("yue_xunkong", "")
+    if _yue_kong and "月空" not in str(_kong):
+        _kong = f"{_kong} {_yue_kong}（月空）".strip()
+        meta["kong_wang"] = _kong
+
     # 补全变卦阴阳爻：非动爻 = 本卦阴阳爻, 动爻 = 翻转
     ben_lines = ben_lines_from_yao(yao)
     bian_lines = compute_bian_lines(ben_lines, yao)
@@ -738,7 +745,7 @@ def generate(data: dict, output_path: str) -> str:
         patterns_block=patterns_html,
         shensha_block=shensha_html,
         final_block=build_final_block(s7),
-        verify_result=f"✅ {s8['final']}",
+        verify_result=f"✅ {s8.get('final', s8.get('summary', '校验完成'))}",
         generate_time=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
 
