@@ -315,7 +315,7 @@ def test_sanhe_ju(failures):
         )
     case_count += 1
 
-    # 正例 C：3 字全现 + 0 字动 + 日月在 3 字中 → 仍是虚合（用户修订：日月不代替动爻）
+    # 正例 C：3 字全现 + 0 字动 + 日月占其中一字 → 成局（日月引动合局）
     lines_sm = [
         make_line(1, "申"),
         make_line(2, "子"),
@@ -328,9 +328,9 @@ def test_sanhe_ju(failures):
     matched = [s for s in result["sanhe_ju"] if s["group"] == "申子辰"]
     if not matched:
         failures.append("  ✗ 三合局 申子辰（全静+月建申）未检测到")
-    elif matched[0]["status"] != "虚合":
+    elif matched[0]["status"] != "成局":
         failures.append(
-            f"  ✗ 三合局 申子辰（全静+月建申）状态错误：期望 虚合（日月不代替动爻），"
+            f"  ✗ 三合局 申子辰（全静+月建申）状态错误：期望 成局（日月引动），"
             f"实际 {matched[0]['status']}"
         )
     case_count += 1
