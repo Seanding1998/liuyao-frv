@@ -747,6 +747,119 @@ def test_build_paipan_attr_integration(failures):
     print(f"  4 种代表卦（游魂/归魂/六合/六冲）build_paipan_data 集成，共 4 用例")
 
 
+# ── 测试 9：游魂归魂规则校验（防 GUA64 第 10 列错标）──
+# 规则定义（不依赖 GUA64 表标签）：
+#   游魂卦 = 八宫第 7 卦，世爻 4 应爻 1
+#   归魂卦 = 八宫第 8 卦，世爻 3 应爻 6
+# 期望清单：从公开纳甲筮法表硬编码（(宫, 卦名) 二元组）
+
+EXPECTED_YOU_HUN = [
+    ("乾宫", "火地晋"), ("兑宫", "雷山小过"),
+    ("离宫", "天水讼"), ("震宫", "泽风大过"),
+    ("巽宫", "山雷颐"), ("坎宫", "地火明夷"),
+    ("艮宫", "风泽中孚"), ("坤宫", "水天需"),
+]
+EXPECTED_GUI_HUN = [
+    ("乾宫", "火天大有"), ("兑宫", "雷泽归妹"),
+    ("离宫", "天火同人"), ("震宫", "泽雷随"),
+    ("巽宫", "山风蛊"), ("坎宫", "地水师"),
+    ("艮宫", "风山渐"), ("坤宫", "水地比"),
+]
+
+
+def test_you_gui_hun_rule_consistency(failures):
+    """用'世应位置 + 宫名硬编码'反推校验 GUA64 表第 10 列标签无误标。
+
+    防止 detect_patterns 第 285-288 行 `"游魂" in ben_attr` 子串匹配
+    因 GUA64 表某行漏标/错标而静默失败。
+    """
+    case_count = 0
+    you_hun_in_table = []   # [(gong, name, shi, ying, guastr), ...]
+    gui_hun_in_table = []
+    other_tag_in_table = []  # 第 10 列非空但既不是游魂也不是归魂
+
+    for guastr, arr in GUA64.items():
+        tag = arr[9] or ""
+        gong = arr[10]
+        name = arr[11]
+        shi = arr[6]
+        ying = arr[7]
+        if "游魂" in tag:
+            you_hun_in_table.append((gong, name, shi, ying, guastr))
+        elif "归魂" in tag:
+            gui_hun_in_table.append((gong, name, shi, ying, guastr))
+        elif tag:
+            other_tag_in_table.append((gong, name, tag, guastr))
+        case_count += 1
+
+    # 校验 1：数量必须是 8/8（八宫各 1 个）
+    if len(you_hun_in_table) != 8:
+        failures.append(
+            f"  ✗ 游魂卦数量异常：期望 8 个，实际 {len(you_hun_in_table)} 个"
+        )
+    if len(gui_hun_in_table) != 8:
+        failures.append(
+            f"  ✗ 归魂卦数量异常：期望 8 个，实际 {len(gui_hun_in_table)} 个"
+        )
+
+    # 校验 2：(宫, 名) 与期望完全一致
+    you_hun_actual_pairs = [(g, n) for g, n, s, y, k in you_hun_in_table]
+    gui_hun_actual_pairs = [(g, n) for g, n, s, y, k in gui_hun_in_table]
+    for g, n in EXPECTED_YOU_HUN:
+        if (g, n) not in you_hun_actual_pairs:
+            failures.append(
+                f"  ✗ 游魂卦缺失：期望 {g}-{n}，GUA64 表未标'游魂卦'"
+            )
+    for g, n in EXPECTED_GUI_HUN:
+        if (g, n) not in gui_hun_actual_pairs:
+            failures.append(
+                f"  ✗ 归魂卦缺失：期望 {g}-{n}，GUA64 表未标'归魂卦'"
+            )
+    for g, n in you_hun_actual_pairs:
+        if (g, n) not in EXPECTED_YOU_HUN:
+            failures.append(
+                f"  ✗ 游魂卦误标：{g}-{n} 不在期望的 8 个游魂卦清单内"
+            )
+    for g, n in gui_hun_actual_pairs:
+        if (g, n) not in EXPECTED_GUI_HUN:
+            failures.append(
+                f"  ✗ 归魂卦误标：{g}-{n} 不在期望的 8 个归魂卦清单内"
+            )
+
+    # 校验 3：游魂世爻 4 应爻 1；归魂世爻 3 应爻 6
+    for g, n, s, y, k in you_hun_in_table:
+        if s != 4 or y != 1:
+            failures.append(
+                f"  ✗ 游魂 {g}-{n} 世应位置错：世{s}应{y}（期望 世4应1）"
+            )
+    for g, n, s, y, k in gui_hun_in_table:
+        if s != 3 or y != 6:
+            failures.append(
+                f"  ✗ 归魂 {g}-{n} 世应位置错：世{s}应{y}（期望 世3应6）"
+            )
+
+    # 校验 4：八宫各有 1 游魂 + 1 归魂（防同宫出现两个或缺失）
+    you_hun_gongs = {g for g, n, s, y, k in you_hun_in_table}
+    gui_hun_gongs = {g for g, n, s, y, k in gui_hun_in_table}
+    all_gongs = {"乾宫", "兑宫", "离宫", "震宫",
+                 "巽宫", "坎宫", "艮宫", "坤宫"}
+    if you_hun_gongs != all_gongs:
+        missing = all_gongs - you_hun_gongs
+        failures.append(f"  ✗ 游魂卦宫位缺失：{missing}")
+    if gui_hun_gongs != all_gongs:
+        missing = all_gongs - gui_hun_gongs
+        failures.append(f"  ✗ 归魂卦宫位缺失：{missing}")
+
+    # 校验 5：第 10 列若有其他标签（既不是游魂也不是归魂）→ 报告
+    for g, n, t, k in other_tag_in_table:
+        failures.append(
+            f"  ✗ GUA64[{k}] {g}-{n} 第 10 列有未知标签：{t!r}"
+        )
+
+    print(f"=== 测试 9：游魂归魂规则一致性（防 GUA64 表错标）===")
+    print(f"  8 游魂 + 8 归魂 × (宫名 + 世应 + 数量) 校验，共 {case_count} 卦扫描")
+
+
 def main():
     failures = []
 
@@ -760,6 +873,7 @@ def main():
     test_fanyin(failures)
     test_dufa_dujing(failures)
     test_build_paipan_attr_integration(failures)
+    test_you_gui_hun_rule_consistency(failures)
 
     if failures:
         print(f"\n❌ 失败 {len(failures)} 项:")
@@ -767,7 +881,7 @@ def main():
             print(f)
         sys.exit(1)
     else:
-        print(f"\n✅ 全部 10 类测试通过。")
+        print(f"\n✅ 全部 11 类测试通过。")
         sys.exit(0)
 
 
