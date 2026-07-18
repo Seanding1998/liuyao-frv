@@ -88,6 +88,13 @@ DIZHI_SANHUI_GROUPS = [
     ("巳", "午", "未"),   # 南方火局
     ("申", "酉", "戌"),   # 西方金局
 ]
+# 三合局（长生-帝旺-墓库 + 五行属性）
+DIZHI_SANHE_GROUPS = [
+    ("申", "子", "辰", "水"),   # 水局
+    ("亥", "卯", "未", "木"),   # 木局
+    ("寅", "午", "戌", "火"),   # 火局
+    ("巳", "酉", "丑", "金"),   # 金局
+]
 
 
 def _liuqin_by_gong(gong_wuxing, yao_wuxing):
@@ -105,37 +112,123 @@ def _liuqin_by_gong(gong_wuxing, yao_wuxing):
     return "?"
 
 
-def detect_patterns(lines, ben_gua_attr, bian_gua_attr):
+def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen=""):
     """特殊格局自动检测（规则化判断，非 AI 手动识别）
 
-    从 lines 数据自动推断三会局 / 地支六合 / 地支六冲 / 伏吟 / 反吟 / 独发 / 独静 /
-    本卦六冲卦 / 本卦六合卦。此函数是格局检测的唯一权威来源——
+    从 lines 数据自动推断三会局 / 三合局 / 地支六合 / 地支六冲 / 伏吟 / 反吟 /
+    独发 / 独静 / 本卦六冲卦 / 本卦六合卦。此函数是格局检测的唯一权威来源——
     SKILL.md 第三步应直接读取 JSON 的 patterns 字段，不再让 AI 手动识别。
 
     参数：
       lines:          build_paipan_data 产出的 lines 数组
       ben_gua_attr:   本卦属性（"六冲"/"六合"/""/None）
       bian_gua_attr:  变卦属性
+      month_branch:   月建地支（用于判断日月补字）
+      ri_chen:         日辰地支（用于判断日月补字）
 
     返回 dict。
+
+    三会局状态：
+      严格成局：三支都动（或两动+日月补第三字）
+      三会之势：三支俱全 + 含动爻但不满足严格条件
+      虚势：    三支俱全但全静
+
+    三合局状态：
+      成局：三字全现 + 至少一字动（或二字+日月补缺字且含动）
+      半合：二字现 + 含动爻（标 subtype：长生帝旺/帝旺墓库/长生墓库）
+      虚合：三字全现但全静
     """
     dizhi_list = [l["di_zhi"] for l in lines]
     dizhi_set = set(dizhi_list)
     dong_lines = [l for l in lines if l["dong"]]
     dong_count = len(dong_lines)
 
-    # ── 三会局：三支俱全即记录，旬空者标"虚势"──
+    # ── 三会局：3 档（严格成局/三会之势/虚势）──
     sanhui = []
     for group in DIZHI_SANHUI_GROUPS:
         present = [dz for dz in group if dz in dizhi_set]
-        if len(present) == 3:
-            kong_pos = [l["pos"] for l in lines
-                        if l["di_zhi"] in group and l.get("kong_wang")]
-            sanhui.append({
-                "group": "".join(group),
-                "status": "虚势" if kong_pos else "成局",
-                "kong_positions": kong_pos,
-            })
+        if len(present) != 3:
+            continue
+        group_lines = [l for l in lines if l["di_zhi"] in group]
+        dong_positions = [l["pos"] for l in group_lines if l["dong"]]
+        static_positions = [l["pos"] for l in group_lines if not l["dong"]]
+        kong_positions = [l["pos"] for l in group_lines if l.get("kong_wang")]
+        sun_moon_in_group = (month_branch in group) or (ri_chen in group)
+        # 严格成局：3 动 / 2 动 + 日月补 1 静
+        if len(dong_positions) == 3:
+            status = "严格成局"
+        elif len(dong_positions) == 2 and sun_moon_in_group:
+            status = "严格成局"
+        elif len(dong_positions) >= 1:
+            status = "三会之势"
+        else:
+            status = "虚势"
+        sanhui.append({
+            "group": "".join(group),
+            "status": status,
+            "dong_positions": dong_positions,
+            "static_positions": static_positions,
+            "kong_positions": kong_positions,
+            "sun_moon_in_group": sun_moon_in_group,
+        })
+
+    # ── 三合局：3 档（成局/半合/虚合）+ 日月补字 ──
+    sanhe = []
+    for g0, g1, g2, wx in DIZHI_SANHE_GROUPS:
+        group_tuple = (g0, g1, g2)
+        present_in_gua = [dz for dz in group_tuple if dz in dizhi_set]
+        missing_in_gua = [dz for dz in group_tuple if dz not in dizhi_set]
+        group_lines = [l for l in lines if l["di_zhi"] in group_tuple]
+        dong_positions = [l["pos"] for l in group_lines if l["dong"]]
+        kong_positions = [l["pos"] for l in group_lines if l.get("kong_wang")]
+        has_dong = bool(dong_positions)
+        # 日月补缺字（只补一字）
+        sun_moon_fills = (
+            len(missing_in_gua) == 1
+            and missing_in_gua[0] in (month_branch, ri_chen)
+        )
+
+        if len(present_in_gua) == 3:
+            if has_dong:
+                status = "成局"
+            else:
+                status = "虚合"
+            subtype = ""
+            missing = ""
+        elif len(present_in_gua) == 2:
+            if sun_moon_fills:
+                # 二字 + 日月补字 = 三字俱全
+                status = "成局" if has_dong else "虚合"
+                subtype = ""
+                missing = missing_in_gua[0]
+            elif has_dong:
+                # 半合：二字现 + 含动爻
+                status = "半合"
+                present_set = set(present_in_gua)
+                if present_set == {g0, g1}:
+                    subtype = "长生帝旺"
+                elif present_set == {g1, g2}:
+                    subtype = "帝旺墓库"
+                elif present_set == {g0, g2}:
+                    subtype = "长生墓库"
+                else:
+                    subtype = ""
+                missing = missing_in_gua[0] if missing_in_gua else ""
+            else:
+                continue  # 二字现 + 全静 + 无日月补 → 不记录
+        else:
+            continue  # 只 1 字 → 不记录
+
+        sanhe.append({
+            "group": g0 + g1 + g2,
+            "wuxing": wx,
+            "status": status,
+            "subtype": subtype,
+            "dong_positions": dong_positions,
+            "kong_positions": kong_positions,
+            "missing": missing,
+            "sun_moon_fills": sun_moon_fills,
+        })
 
     # ── 地支六合：卦中任意两爻地支成合 ──
     liuhe = []
@@ -176,9 +269,14 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr):
     bian_attr = bian_gua_attr or ""
     ben_liuchong_gua = "六冲" in ben_attr
     ben_liuhe_gua = "六合" in ben_attr
+    ben_you_hun = "游魂" in ben_attr
+    ben_gui_hun = "归魂" in ben_attr
+    bian_you_hun = "游魂" in bian_attr
+    bian_gui_hun = "归魂" in bian_attr
 
     return {
         "sanhui_ju": sanhui,
+        "sanhe_ju": sanhe,
         "dizhi_liuhe": liuhe,
         "dizhi_liuchong": liuchong,
         "fuyin_positions": fuyin,
@@ -189,6 +287,10 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr):
         "bian_gua_attr": bian_attr,
         "ben_liuchong_gua": ben_liuchong_gua,
         "ben_liuhe_gua": ben_liuhe_gua,
+        "ben_you_hun": ben_you_hun,
+        "ben_gui_hun": ben_gui_hun,
+        "bian_you_hun": bian_you_hun,
+        "bian_gui_hun": bian_gui_hun,
         "dong_count": dong_count,
     }
 
@@ -627,7 +729,7 @@ b8 = ["官鬼巳火", "妻财卯木", "父母丑土", "官鬼午火", "兄弟申
 # ── 离宫八卦 ──
 c1 = ["父母卯木", "子孙丑土", "官鬼亥水", "妻财酉金", "子孙未土", "兄弟巳火",
       6, 3, "六冲", "", "离宫", "离为火"]
-c2 = ["子孙丑土", "官鬼亥水", "妻财申金", "妻财酉金", "子孙未土", "兄弟巳火",
+c2 = ["子孙辰土", "兄弟午火", "妻财申金", "妻财酉金", "子孙未土", "兄弟巳火",
       1, 4, "六合", "", "离宫", "火山旅"]
 c3 = ["子孙丑土", "官鬼亥水", "妻财酉金", "妻财酉金", "子孙未土", "兄弟巳火",
       2, 5, "", "", "离宫", "火风鼎"]
@@ -639,7 +741,7 @@ c6 = ["父母寅木", "子孙辰土", "兄弟午火", "子孙未土", "兄弟巳
       5, 2, "", "", "离宫", "风水涣"]
 c7 = ["父母寅木", "子孙辰土", "兄弟午火", "兄弟午火", "妻财申金", "子孙戌土",
       4, 1, "", "游魂卦", "离宫", "天水讼"]
-c8 = ["父母卯木", "子孙辰土", "官鬼亥水", "兄弟午火", "妻财申金", "子孙戌土",
+c8 = ["父母卯木", "子孙丑土", "官鬼亥水", "兄弟午火", "妻财申金", "子孙戌土",
       3, 6, "", "归魂卦", "离宫", "天火同人"]
 
 # ── 震宫八卦 ──
@@ -651,9 +753,9 @@ d3 = ["兄弟寅木", "妻财辰土", "子孙午火", "子孙午火", "官鬼申
       2, 5, "", "", "震宫", "雷水解"]
 d4 = ["妻财丑土", "父母亥水", "官鬼酉金", "子孙午火", "官鬼申金", "妻财戌土",
       3, 6, "", "", "震宫", "雷风恒"]
-d5 = ["妻财辰土", "子孙午火", "官鬼申金", "妻财丑土", "父母亥水", "兄弟酉金",
-      3, 6, "", "", "震宫", "地风升"]
-d6 = ["妻财辰土", "父母亥水", "官鬼酉金", "官鬼申金", "妻财戌土", "父母子水",
+d5 = ["妻财丑土", "父母亥水", "官鬼酉金", "妻财丑土", "父母亥水", "官鬼酉金",
+      4, 1, "", "", "震宫", "地风升"]
+d6 = ["妻财丑土", "父母亥水", "官鬼酉金", "官鬼申金", "妻财戌土", "父母子水",
       5, 2, "", "", "震宫", "水风井"]
 d7 = ["妻财丑土", "父母亥水", "官鬼酉金", "父母亥水", "官鬼酉金", "妻财未土",
       4, 1, "", "游魂卦", "震宫", "泽风大过"]
@@ -716,9 +818,9 @@ g8 = ["兄弟辰土", "父母午火", "子孙申金", "兄弟未土", "父母巳
 
 # ── 坤宫八卦 ──
 h1 = ["兄弟未土", "父母巳火", "官鬼卯木", "兄弟丑土", "妻财亥水", "子孙酉金",
-      1, 4, "六冲", "", "坤宫", "坤为地"]
+      6, 3, "六冲", "", "坤宫", "坤为地"]
 h2 = ["妻财子水", "官鬼寅木", "兄弟辰土", "兄弟丑土", "妻财亥水", "子孙酉金",
-      6, 3, "六合", "", "坤宫", "地雷复"]
+      1, 4, "六合", "", "坤宫", "地雷复"]
 h3 = ["父母巳火", "官鬼卯木", "兄弟丑土", "兄弟丑土", "妻财亥水", "子孙酉金",
       2, 5, "", "", "坤宫", "地泽临"]
 h4 = ["妻财子水", "官鬼寅木", "兄弟辰土", "兄弟丑土", "妻财亥水", "子孙酉金",
@@ -1123,7 +1225,8 @@ class LiuYaoPaipan:
             "bguastr": bguastr if has_dong else None,
             "ygua": "".join(ygua),
             "lines": lines,
-            "patterns": detect_patterns(lines, main_gua_attr, bian_gua_attr),
+            "patterns": detect_patterns(lines, main_gua_attr, bian_gua_attr,
+                                       gz["month_branch"], gz["ri_zhi"]),
             "seed": seed,
         }
 
