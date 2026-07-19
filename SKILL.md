@@ -62,7 +62,7 @@ metadata:
 - `month_branch`：月建地支
 - `ri_chen`：日辰地支
 - `kong_wang`：日柱旬空地支列表 `[str, str]`（甲午日→旬空辰巳）
-- `yue_xunkong`：月柱旬空地支列表 `[str, str]`（乙未月→与日同属甲午旬，旬空辰巳）
+- `yue_xunkong`：月柱旬空地支列表 `[str, str]`
 - `question`：所问之事
 - `intent`：意图类别 — `求财|官运|学业|感情|健康|孕产|出行|失物|寻人|词讼|阳宅|天气|通用`
 - `ben_gua`：本卦名
