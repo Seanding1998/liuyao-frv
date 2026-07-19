@@ -61,7 +61,8 @@ metadata:
 - `ganzhi`：四柱 `{year, month, day, hour}` 干支字符串
 - `month_branch`：月建地支
 - `ri_chen`：日辰地支
-- `kong_wang`：日柱旬空地支列表 `[str, str]`
+- `kong_wang`：日柱旬空地支列表 `[str, str]`（甲午日→旬空辰巳）
+- `yue_xunkong`：月柱旬空地支列表 `[str, str]`（乙未月→与日同属甲午旬，旬空辰巳）
 - `question`：所问之事
 - `intent`：意图类别 — `求财|官运|学业|感情|健康|孕产|出行|失物|寻人|词讼|阳宅|天气|通用`
 - `ben_gua`：本卦名
@@ -87,7 +88,7 @@ dong:     是否发动 (true/false)
 bian_yao: 变爻信息（如有）{ di_zhi, wu_xing, liu_qin }
 liu_shou: 六神 (青龙/朱雀/勾陈/腾蛇/白虎/玄武)
 fu_shen:  伏神信息（如有）{ liu_qin, di_zhi, wu_xing }
-kong_wang: 是否旬空 (true/false)
+kong_wang: 旬空标记（"" / "日空" / "月空" / "日空月空"）——paipan.py 区分日月双空
 ```
 
 ---
@@ -205,6 +206,7 @@ kong_wang: 是否旬空 (true/false)
 - 排盘命令：[完整命令（含 -o 到卦例目录的路径，若有 --seed 也写出）]
 - 排盘结果摘要：本卦[名] 变卦[名] 世[世爻位]爻 应[应爻位]爻 动爻[N]个 计算后端=[sxtwl|pure] seed=[N或未指定]
 - 特殊格局（自动检测）：[列出 patterns 中非空项或 true 项，如「六冲：丑未、本卦六冲卦、本卦游魂卦」；全空写「无」。**注意**：`ben_you_hun`/`ben_gui_hun`/`bian_you_hun`/`bian_gui_hun` 为 true 时必须列出，触发第三步加载 `references/64-gua.md`]
+- 日旬空：[直接读 JSON `kong_wang` 字段，如「辰巳」] — 月旬空：[直接读 JSON `yue_xunkong` 字段]
 - 农历日期：[直接读 JSON `lunar` 字段，如「丙午年五月廿六」；**禁止手算**——双轨（sxtwl + pure）均已自动计算]
 - JSON 数据路径：`{卦例目录}/paipan_result.json`（通过 `read_file` 工具读取，已解析为内存对象）
 - 最终目录名：[重命名后的完整路径]
