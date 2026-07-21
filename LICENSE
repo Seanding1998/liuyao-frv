@@ -1,21 +1,29 @@
-MIT License
+# 六爻排盘解卦系统 — 个人免费·商业授权许可证
 
-Copyright (c) 2026
+Copyright (c) 2026 Seanding
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## 个人免费许可
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+特此授予任何自然人免费许可，允许其：
+- 使用、复制、修改本软件用于个人、学习、研究目的
+- 在个人设备上运行本软件
+- 为本软件贡献代码或文档
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+## 商业使用限制
+
+以下行为需要取得作者的商业授权许可：
+- 将本软件或其衍生作品用于任何商业目的（含直接盈利、商业服务、SaaS 提供）
+- 任何企业、组织、机构（含非营利机构）在其业务中使用本软件
+- 将本软件作为商业产品或服务的一部分进行分发、销售或再授权
+
+## 商业授权
+
+如需商业使用，请联系作者获取商业许可证。
+
+## 免责声明
+
+本软件按"现状"提供，不提供任何明示或暗示的担保。作者不对因使用本软件而产生的任何索赔、损害或其他责任负责。
+
+## 其他
+
+上述许可不限制作者以其他许可证分发本软件的权利。
