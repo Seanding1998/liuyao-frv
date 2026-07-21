@@ -808,6 +808,72 @@ def validate_json(data):
                     f"schema 从步骤 md 文件组装完整 JSON，再跑 --validate。"
                 )
 
+
+    # ── 动变方向↔五行生克一致性校验（🚨 防方向性错误：申=金→卯=木 是金克木=本爻克变爻，不是回头克）──
+    DIZHI_WUXING = {
+        "申": "金", "酉": "金",
+        "寅": "木", "卯": "木",
+        "亥": "水", "子": "水",
+        "巳": "火", "午": "火",
+        "辰": "土", "戌": "土", "丑": "土", "未": "土",
+    }
+    WUXING_KE = {"金": "木", "木": "土", "土": "水", "水": "火", "火": "金"}
+    WUXING_SHENG = {"金": "水", "水": "木", "木": "火", "火": "土", "土": "金"}
+    TAG_TO_REQUIRED = {
+        "回头克": "bian_ke_ben",
+        "回头生": "bian_sheng_ben",
+        "化出我克者": "ben_ke_bian",
+        "化出我生者": "ben_sheng_bian",
+    }
+    DIR_NAMES = {
+        "bian_ke_ben": "回头克",
+        "bian_sheng_ben": "回头生",
+        "ben_ke_bian": "化出我克者",
+        "ben_sheng_bian": "化出我生者",
+    }
+    if "yao" in data and "steps" in data and "step3" in data["steps"]:
+        step3_dong = {d["pos"]: d for d in data["steps"]["step3"].get("dong_yao", [])}
+        for y in data["yao"]:
+            if not y.get("dong"):
+                continue
+            pos = y["pos"]
+            bw = y.get("wu_xing", "")
+            bian_dz = y.get("bian_di_zhi")
+            if not bian_dz or not bw:
+                continue
+            bian_wx = DIZHI_WUXING.get(bian_dz)
+            if not bian_wx:
+                continue
+
+            if bw == bian_wx:
+                actual_dir = "same"
+            elif WUXING_KE.get(bw) == bian_wx:
+                actual_dir = "ben_ke_bian"
+            elif WUXING_KE.get(bian_wx) == bw:
+                actual_dir = "bian_ke_ben"
+            elif WUXING_SHENG.get(bw) == bian_wx:
+                actual_dir = "ben_sheng_bian"
+            elif WUXING_SHENG.get(bian_wx) == bw:
+                actual_dir = "bian_sheng_ben"
+            else:
+                actual_dir = "unknown"
+
+            sd = step3_dong.get(pos)
+            if not sd:
+                continue
+            ct = sd.get("change_type", "")
+            for tag, required_dir in TAG_TO_REQUIRED.items():
+                if tag in ct:
+                    if actual_dir != required_dir:
+                        correct_tag = DIR_NAMES.get(actual_dir, actual_dir)
+                        errors.append(
+                            f"yao pos={pos} 动变方向矛盾：本爻{bw}({y['di_zhi']}) → 变爻{bian_wx}({bian_dz})，"
+                            f"实际方向={actual_dir}(应标'{correct_tag}')，"
+                            f"但 step3 change_type 含 '{tag}'（要求方向={required_dir}）。"
+                            f"请回退第三步修正生克方向判定（参考 jie-gua-xiang-jie.md §3.2 前置步骤）。"
+                        )
+                    break
+
     return (len(errors) == 0, errors)
 
 
