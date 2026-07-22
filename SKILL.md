@@ -37,7 +37,7 @@ metadata:
 10. **铁律 10·旺衰内量化外自然**：内部推理可用数字量化（如月建助+1，生+2、日辰克-1，冲-2、合解冲有合有冲+0等）辅助判定，但写入步骤输出和最终报告时，必须转换为自然语言（如「月建生用神，旺」「日辰克用神，囚」），不得在用户可见文本中出现 +1/-1 等打分记号。
 11. **铁律 11·格局不遗漏**：第三步必须检测三会局、六合、六冲、伏吟、反吟、六冲卦等特殊格局。第七步综合断语必须引用检测结论。JSON step3.pattern 字段必须包含完整格局分析，不得用一句「静卦无特殊格局」敷衍。
 12. **铁律 12·文件统一存放**：所有过程文件（`paipan_result.json`、`liuyao-data.json`、`liuyao-report.html`、各步骤 md 文件）必须统一存入桌面卦例目录 `~/Desktop/YY.MM.DD-本卦名之变卦名-事件简称/`。此目录在**第零步意图确认后立即创建**（先用临时名，排盘完成后根据卦名重命名），是本次卦例的唯一文件存放位置。各步骤读写文件时必须使用该目录的绝对路径，严禁将过程文件散落于用户主目录、工作目录或脚本目录。桌面路径三平台适配：`~/Desktop/` 优先 → 中文 Linux `~/桌面/` → 无桌面环境时回退到 `~/.liuyao/cases/`（不污染主目录）。
-13. **铁律 13·格局检测单一权威**：特殊格局（三会局/六合/六冲/伏吟/反吟/独发/独静/本卦属性）由 `paipan.py` 的 `detect_patterns()` 自动检测，结果写入 JSON `patterns` 字段。解卦流程中 Agent **直接读取 JSON `patterns` 字段**，**禁止手动重新识别**（两套逻辑会打架）。第三步和第八步校验均以 JSON 数据为准。
+13. **铁律 13·格局检测单一权威**：特殊格局（三会局/六合/六冲/伏吟/反吟/独发/独静/本卦属性）由 `paipan.py` 的 `detect_patterns()` 自动检测，结果写入 JSON `patterns` 字段。解卦流程中 Agent **直接读取 JSON `patterns` 字段**，**禁止手动重新识别**（两套逻辑会打架）。第三步和第八步校验均以 JSON 数据为准。**🚨 若 JSON patterns 中 `ben_liuchong_gua`=false，报告中严禁出现「本卦为六冲卦」的表述。六冲卦仅限 10 卦（八纯卦+天雷无妄+雷天大壮），风雷益、风火家人、水雷屯、火雷噬嗑、山雷颐等均非六冲卦。凡报告与 JSON 不一致→必为手动识别错误。**
 14. **铁律 14·路由表优先**：第零步意图确认后，必须立即查「第零步附：intent 路由表」预读该 intent 列出的全部场景类/类象类 references（精确到小节），贯穿后续所有步骤使用。跨 intent 问题取并集。不得凭记忆替代，不得等到第七步才加载场景类。
 15. **铁律 15·每步自检门禁**：每一步开头必须显式输出「**本步已加载 references 清单**」，再开始执行该步分析。**统一写入位置**：紧接各步「📤 强制输出」块的 `【第X步·输出】` 标题之后，作为该块的第一行，格式固定为：
     ```
@@ -384,7 +384,8 @@ kong_wang: 旬空标记（"" / "日空" / "月空" / "日空月空"）——paip
 > - 卦中存在**任何** dong:true 的爻 → **必须**加载 `references/dong-bian-fa-ze.md`（全部章节）
 > - **必须**加载 `references/jie-gua-xiang-jie.md` 第三节（动变角色+变化判定+多爻联动规则）
 > - JSON `patterns` 字段中存在 dizhi_liuhe / dizhi_liuchong / sanhui_ju 非空 → **必须**加载 `references/di-zhi-relations.md`
-> - JSON `patterns` 字段中 ben_liuchong_gua / ben_liuhe_gua=true 或 fuyin/fanyin 非空或 dufa/dujing=true → **必须**加载 `references/te-shu-ge-ju.md`
+> - **必须**加载 `references/te-shu-ge-ju.md`「卦体结构格局」「常见六冲卦」「常见误判陷阱」三节（**无论 patterns 值如何**——Agent 输出第三步特殊格局时，必须对照此列表确认本卦是否属于六冲/六合卦，禁止凭记忆判断。即使 patterns 中 ben_liuchong_gua=false，也必须读过列表才能写出「本卦非六冲卦」的结论。）
+> - 若 JSON `patterns` 字段中 ben_liuchong_gua / ben_liuhe_gua=true 或 fuyin/fanyin 非空或 dufa/dujing=true → 额外通读 `references/te-shu-ge-ju.md` 其余各节（用神格局、伏吟反吟详述等）
 > - JSON `patterns` 字段中 `ben_you_hun` / `ben_gui_hun` / `bian_you_hun` / `bian_gui_hun` 任一为 true → **必须**加载 `references/64-gua.md`（确认本卦/变卦的八宫、世爻位、六合/六冲/游魂/归魂属性）
 > - intent=阳宅 → **必须**加载 `references/64-gua.md`（卦宫属性是阳宅断的基础）
 
@@ -559,7 +560,7 @@ kong_wang: 旬空标记（"" / "日空" / "月空" / "日空月空"）——paip
 
 > 📁 落地：写入 `{卦例目录}/步骤6-应期推断.md`
 
-**✅ 检查点**：是否按优先级逐条匹配？单位选择是否符合急/缓/远？与第二步旺衰是否一致（旺相不应"待旺"）？是否有具体地支推算？
+**✅ 检查点**：是否按优先级逐条匹配？单位选择是否符合急/缓/远？与第二步旺衰是否一致（旺相不应"待旺"）？是否有具体地支推算？**措辞检查**：用神旺相逢冲→写「冲起」非「冲动」；用神休囚逢冲→写「冲破」非「冲动」；「冲动」为模糊用语，仅用于无法判定旺衰时。
 
 ---
 
@@ -624,7 +625,8 @@ B. 一致性交叉验证（逐条）：
   伏神↔用神：[一致/⚠️错误...已修正/不适用]
   三合↔单爻：[一致/⚠️遗漏...已修正/不适用]
   静卦↔动变：[一致/⚠️错误...已修正/不适用]
-  应期覆盖完整性：[完整/⚠️漏判...已补正]（🚨 防应期漏判：用神/忌神/原神若涉及空亡 → 必须同时列出填实日和冲空日；涉及休囚 → 列出当令月和生扶月；涉及安静 → 列出逢冲日；涉及伏藏 → 列出值伏日和冲飞日。凡只列一条而不检查互补规则 → 判"⚠️漏判"回退第七步补全。）
+   应期覆盖完整性：[完整/⚠️漏判...已补正]（🚨 防应期漏判：用神/忌神/原神若涉及空亡 → 必须同时列出填实日和冲空日；涉及休囚 → 列出当令月和生扶月；涉及安静 → 列出逢冲日；涉及伏藏 → 列出值伏日和冲飞日。凡只列一条而不检查互补规则 → 判"⚠️漏判"回退第七步补全。）
+   格局↔JSON patterns：[一致/⚠️矛盾...已修正]（🚨 防格局误判：报告中的格局标签（六冲卦/六合卦/游魂/归魂等）是否与 JSON patterns 的 bool 字段一致？若 ben_liuchong_gua=false 但报告写了六冲卦→矛盾，回退第七步修正。）
   动变方向↔五行生克（🚨 防方向性错误：对每个动爻，从 JSON 取 ben_wu_xing 和 bian_wu_xing，对照 `jie-gua-xiang-jie.md §3.2 前置步骤` 的五行生克表，验证断语中的「回头克/回头生/化出我克者/化出我生者」标签方向正确。如申=金、卯=木 → 金克木 = 本爻克变爻，标签若为「回头克」→⚠️矛盾。不一致→回退第三步修正。）：[一致/⚠️矛盾...已修正/不适用]
 C. 16条原则检查：
   全部通过：[是/否]
@@ -722,7 +724,8 @@ D. references 清单一致性（「每步自检门禁」铁律校验）：
 | 任何爻被日辰合（如午未合、辰酉合等） | `references/dong-bian-fa-ze.md` | 第六节 |
 | JSON lines 中存在任何 dong:true | `references/dong-bian-fa-ze.md` + `references/jie-gua-xiang-jie.md` | 全部 / 第三节 |
 | JSON patterns.sanhui_ju / dizhi_liuhe / dizhi_liuchong 非空 | `references/di-zhi-relations.md` | 对应部分 |
-| JSON patterns.ben_liuchong_gua / ben_liuhe_gua=true 或 fuyin/fanyin 非空或 dufa/dujing=true | `references/te-shu-ge-ju.md` | 对应条目 |
+| 进入第三步（**无条件**，所有卦必须） | `references/te-shu-ge-ju.md` | 「卦体结构格局」「常见六冲卦」「常见误判陷阱」三节（防 Agent 凭记忆误判六冲/六合卦归属） |
+| JSON patterns.ben_liuchong_gua / ben_liuhe_gua=true 或 fuyin/fanyin 非空或 dufa/dujing=true | `references/te-shu-ge-ju.md` | 其余各节（用神格局、伏吟反吟详述等） |
 | 用神明现但其爻下 fu_shen 非空（第三步·附） | `references/dong-bian-fa-ze.md` | 第十节 |
 | 执行第3.5步 | `references/fushi-riyue-guashen.md` + `references/jie-gua-xiang-jie.md` | 全部 / 第3.5节 |
 | 进入第四步 | `references/jie-gua-xiang-jie.md` | 第四节 |
