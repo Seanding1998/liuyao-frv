@@ -177,36 +177,47 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
     dong_count = len(dong_lines)
     dong_set = {l["di_zhi"] for l in dong_lines}
 
-    # ── 三会局：4 态（严格成局 / 成局 / 三会之势 / 虚势）──
+    # ── 三会局：5 态（严格成局 / 成局 / 三会 / 三会之势）──
+    # 激活源：动爻 或 日月入组 → 可成局。旬空是压制因子，暂时冻结状态，出空自动升级。
     sanhui = []
     for group in DIZHI_SANHUI_GROUPS:
         present = [dz for dz in group if dz in dizhi_set]
         if len(present) != 3:
             continue
-        # 该组三支在卦中的爻位
         group_lines = [l for l in lines if l["di_zhi"] in group]
         dong_positions = [l["pos"] for l in group_lines if l["dong"]]
         sun_moon_in_group = (month_branch in group) or (ri_chen in group)
         kong_positions = [l["pos"] for l in group_lines if l.get("kong_wang")]
+        has_kong = bool(kong_positions)
 
+        # ── 有动爻：动则不空，直接判定 ──
         if len(dong_positions) == 3:
             status = "严格成局"
         elif len(dong_positions) == 2 and sun_moon_in_group:
-            status = "严格成局"  # 两动 + 日月补第三字
+            status = "严格成局"
         elif len(dong_positions) >= 1:
             status = "成局"
-        elif sun_moon_in_group and len(dong_positions) == 0:
-            # 三支全静但日月在该组——有气象未成局（与会局不同，日月不入局则仅为虚势）
-            status = "三会之势"
+        # ── 全静：日月入组可激活（与三合局日月引动逻辑一致）──
+        elif sun_moon_in_group:
+            if has_kong:
+                # 日月入组但旬空冻结 → 待出空成局
+                status = "三会"
+            else:
+                status = "成局"
+        # ── 全静 + 日月不在组：仅有气象，未激活 ──
         else:
-            status = "虚势"
+            status = "三会之势"
+            # 旬空暂压气象，出空后恢复为三会之势（状态名不变，kong_positions 标记供 Agent 查应期）
 
+        # 补充待升级信息（出空条件由 Agent 读取 kong_positions 自行推算）
         sanhui.append({
             "group": "".join(group),
             "status": status,
             "dong_positions": dong_positions,
+            "static_positions": static_positions,
             "kong_positions": kong_positions,
             "sun_moon_in_group": sun_moon_in_group,
+            "has_kong": has_kong,
         })
 
     # ── 三合局：3 档 + 日月引动 + 半合子型 ──
