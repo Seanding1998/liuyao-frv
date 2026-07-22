@@ -177,7 +177,7 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
     dong_count = len(dong_lines)
     dong_set = {l["di_zhi"] for l in dong_lines}
 
-    # ── 三会局：3 档（严格成局 / 三会之势 / 虚势）──
+    # ── 三会局：4 态（严格成局 / 成局 / 三会之势 / 虚势）──
     sanhui = []
     for group in DIZHI_SANHUI_GROUPS:
         present = [dz for dz in group if dz in dizhi_set]
@@ -194,9 +194,9 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
         elif len(dong_positions) == 2 and sun_moon_in_group:
             status = "严格成局"  # 两动 + 日月补第三字
         elif len(dong_positions) >= 1:
-            status = "三会之势"
+            status = "成局"
         elif sun_moon_in_group and len(dong_positions) == 0:
-            # 三支全静但日月在该组——仍只作"势"，不能成局（与会局不同）
+            # 三支全静但日月在该组——有气象未成局（与会局不同，日月不入局则仅为虚势）
             status = "三会之势"
         else:
             status = "虚势"
