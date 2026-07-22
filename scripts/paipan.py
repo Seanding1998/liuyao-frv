@@ -178,7 +178,8 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
     dong_set = {l["di_zhi"] for l in dong_lines}
 
     # ── 三会局：5 态（严格成局 / 成局 / 三会 / 三会之势）──
-    # 激活源：动爻 或 日月入组 → 可成局。旬空是压制因子，暂时冻结状态，出空自动升级。
+    # 成局三路径：① 动爻激活  ② 日月临爻（日月之力=动爻）  ③ 动爻+空亡→出空成局
+    # 不成局：全静无日月临 / 全静有日月临但旬空压死 / 卦中缺字靠日月补
     sanhui = []
     for group in DIZHI_SANHUI_GROUPS:
         present = [dz for dz in group if dz in dizhi_set]
@@ -190,26 +191,27 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
         kong_positions = [l["pos"] for l in group_lines if l.get("kong_wang")]
         has_kong = bool(kong_positions)
 
-        # ── 有动爻：动则不空，直接判定 ──
+        # ── 有动爻：动则不空，动爻是激活源 ──
         if len(dong_positions) == 3:
             status = "严格成局"
         elif len(dong_positions) == 2 and sun_moon_in_group:
             status = "严格成局"
         elif len(dong_positions) >= 1:
-            status = "成局"
-        # ── 全静：日月入组可激活（与三合局日月引动逻辑一致）──
-        elif sun_moon_in_group:
             if has_kong:
-                # 日月入组但旬空冻结 → 待出空成局
+                # 动爻不空（动则不空），空在它爻 → 暂时冻结，出空成局
                 status = "三会"
             else:
                 status = "成局"
-        # ── 全静 + 日月不在组：仅有气象，未激活 ──
+        # ── 全静（无动爻）：日月之力可激活，但旬空会压死成局活力 ──
+        elif sun_moon_in_group:
+            if has_kong:
+                # 日月入组 + 空亡 → 空亡压死，出空也只是三会之势，无法成局
+                status = "三会之势"
+            else:
+                status = "成局"
         else:
             status = "三会之势"
-            # 旬空暂压气象，出空后恢复为三会之势（状态名不变，kong_positions 标记供 Agent 查应期）
 
-        # 补充待升级信息（出空条件由 Agent 读取 kong_positions 自行推算）
         sanhui.append({
             "group": "".join(group),
             "status": status,
