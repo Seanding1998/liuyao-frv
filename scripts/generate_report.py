@@ -1020,14 +1020,14 @@ def detect_patterns(ben_lines, yao_list, meta):
         if has_all:
             if len(dong_yao) >= 3:
                 patterns.append({"name": name, "level": "成局", "detail": f'卦中{"、".join(dz_set)}三支皆动，严格成局，力量凌驾单爻生克。', "css": "sanhui-cheng"})
-            elif len(dong_yao) >= 1:
-                missing_dong = [dz for dz in dz_set if dz not in [y["di_zhi"] for y in dong_yao]]
-                patterns.append({"name": name, "level": "之势（动不足）", "detail": f'{"、".join(dz_set)}三支俱全，但仅{len(dong_yao)}爻发动，未达严格三会标准，降为三会之势。', "css": "sanhui-shi"})
             elif kong_yao:
                 kong_dz = [y["di_zhi"] for y in kong_yao]
-                patterns.append({"name": name, "level": "虚势（有支旬空）", "detail": f'{"、".join(dz_set)}三支齐聚，但{"、".join(kong_dz)}旬空，为虚势——三会之势已具其形，须待出空方能化为实质力量。', "css": "sanhui-xu"})
+                dong_info = f'，其中{len(dong_yao)}爻发动' if dong_yao else ''
+                patterns.append({"name": name, "level": "三会之势（旬空）", "detail": f'{"、".join(dz_set)}三支俱全{dong_info}，但{"、".join(kong_dz)}旬空，当下仅为三会之势。待出空填实，则成三会火局。', "css": "sanhui-shi-kong"})
+            elif len(dong_yao) >= 1:
+                patterns.append({"name": name, "level": "三会之势", "detail": f'{"、".join(dz_set)}三支俱全，{len(dong_yao)}爻发动，已成三会之势，增强相关五行之力。', "css": "sanhui-shi"})
             else:
-                patterns.append({"name": name, "level": "之势", "detail": f'{"、".join(dz_set)}三支俱全，静卦伏势，增强相关五行之力。', "css": "sanhui-shi"})
+                patterns.append({"name": name, "level": "三会之势（静）", "detail": f'{"、".join(dz_set)}三支俱全，静卦伏势，增强相关五行之力。', "css": "sanhui-shi"})
     
     # ── 六合检测 ──
     liuhe = {"子":"丑","丑":"子","寅":"亥","亥":"寅","卯":"戌","戌":"卯","辰":"酉","酉":"辰","巳":"申","申":"巳","午":"未","未":"午"}
@@ -1088,8 +1088,8 @@ def build_patterns_section(patterns):
     
     css_map = {
         "sanhui-cheng": "background:#e8f5e9;border-left:4px solid #2e7d32;",
+        "sanhui-shi-kong": "background:#fff8e1;border-left:4px solid #f9a825;",
         "sanhui-shi": "background:#fff8e1;border-left:4px solid #f9a825;",
-        "sanhui-xu": "background:#f3e5f5;border-left:4px solid #7b1fa2;",
         "liuhe": "background:#e3f2fd;border-left:4px solid #1565c0;",
         "liuchong": "background:#fbe9e7;border-left:4px solid #c62828;",
         "fuyin": "background:#fff3e0;border-left:4px solid #e65100;",
