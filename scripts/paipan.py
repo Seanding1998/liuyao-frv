@@ -216,7 +216,6 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
             "group": "".join(group),
             "status": status,
             "dong_positions": dong_positions,
-            "static_positions": static_positions,
             "kong_positions": kong_positions,
             "sun_moon_in_group": sun_moon_in_group,
             "has_kong": has_kong,
