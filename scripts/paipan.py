@@ -212,8 +212,20 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
         else:
             status = "三会之势"
 
+        # 组内每爻详情
+        members = []
+        for l in group_lines:
+            members.append({
+                "pos": l["pos"],
+                "di_zhi": l["di_zhi"],
+                "is_dong": l["dong"],
+                "is_kong": bool(l.get("kong_wang")),
+                "is_sun_moon": month_branch == l["di_zhi"] or ri_chen == l["di_zhi"],
+            })
+
         sanhui.append({
             "group": "".join(group),
+            "members": members,
             "status": status,
             "dong_positions": dong_positions,
             "kong_positions": kong_positions,
