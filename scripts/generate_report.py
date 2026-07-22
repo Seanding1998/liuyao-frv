@@ -808,7 +808,6 @@ def validate_json(data):
                     f"schema 从步骤 md 文件组装完整 JSON，再跑 --validate。"
                 )
 
-
     # ── 动变方向↔五行生克一致性校验（🚨 防方向性错误：申=金→卯=木 是金克木=本爻克变爻，不是回头克）──
     DIZHI_WUXING = {
         "申": "金", "酉": "金",
@@ -1053,10 +1052,18 @@ def detect_patterns(ben_lines, yao_list, meta):
         patterns.append({"name": "六冲", "level": "", "detail": f'卦中存在六冲关系：{detail}。冲则散而不聚，事多反复。', "css": "liuchong"})
     
     # ── 本卦六冲卦检测 ──
-    chong_gua_pairs = {"乾":"坤","坤":"乾","震":"巽","巽":"震","坎":"离","离":"坎","艮":"兑","兑":"艮"}
-    sgua = get_trigram((ben_lines[3], ben_lines[4], ben_lines[5]))
-    xgua = get_trigram((ben_lines[0], ben_lines[1], ben_lines[2]))
-    if chong_gua_pairs.get(sgua) == xgua:
+    # 六冲卦判定：初四/二五/三上 三对爻位地支全部相冲
+    # 六冲卦仅10个：八纯卦(8)+天雷无妄+雷天大壮
+    # 注意：风雷益(上巽下震)不是六冲卦——上下卦互补但纳支不全冲
+    liuchong_dz = {"子":"午","午":"子","丑":"未","未":"丑","寅":"申","申":"寅","卯":"酉","酉":"卯","辰":"戌","戌":"辰","巳":"亥","亥":"巳"}
+    dz_by_pos = {y["pos"]: y["di_zhi"] for y in sorted_yao}
+    chong_count = 0
+    for a, b in [(1,4),(2,5),(3,6)]:
+        if liuchong_dz.get(dz_by_pos.get(a)) == dz_by_pos.get(b):
+            chong_count += 1
+    if chong_count == 3:
+        sgua = get_trigram((ben_lines[3], ben_lines[4], ben_lines[5]))
+        xgua = get_trigram((ben_lines[0], ben_lines[1], ben_lines[2]))
         patterns.append({"name": "六冲卦", "level": "", "detail": f'本卦上{TRIGRAM_SYMBOL[sgua]}下{TRIGRAM_SYMBOL[xgua]}为六冲卦，事多散乱，变动频仍。', "css": "liuchong"})
     
     # ── 伏吟检测（动爻化同地支） ──
