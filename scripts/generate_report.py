@@ -250,6 +250,9 @@ body {{
 /* 标题区 */
 .report-header {{ text-align: center; padding: 32px 0 24px; border-bottom: 2px solid #8b7355; margin-bottom: 32px; }}
 .report-header h1 {{ font-size: 28px; color: #5c3d2e; letter-spacing: 4px; margin-bottom: 8px; }}
+.edition-badge {{ display: inline-block; padding: 2px 14px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }}
+.edition-badge.pro {{ background: #fff3cd; color: #8a6d1a; border: 1px solid #d4b84a; }}
+.edition-badge.free {{ background: #e8e8e8; color: #555; border: 1px solid #bbb; }}
 .report-header .subtitle {{ font-size: 18px; color: #8b7355; }}
 .report-header .question {{ font-size: 15px; color: #6b5a4e; margin-top: 12px; }}
 .report-header .date {{ font-size: 13px; color: #9e8b7a; margin-top: 4px; }}
@@ -409,6 +412,7 @@ function toggleCuoZong() {{
 <!-- 1. 标题区 -->
 <header class="report-header">
   <h1>六爻卦象报告</h1>
+  <p class="edition-badge free">六爻解卦 · 免费基础版</p>
   <p class="subtitle">本卦《{ben_gua}》　变卦《{bian_gua}》</p>
   <p class="question">所问：{question}</p>
   <p class="date">占卦时间：{date}　农历{lunar}</p>
