@@ -1,13 +1,5 @@
 # Changelog
 
-## v1.7.3 (2026-08-03)
-
-### 套餐徽章模板变量化 + 报告作者信息（同构 main v1.8.3）
-
-1. **徽章文本模板变量化**：`generate_report.py` 改用 `{edition_badge}` / `{edition_class}` 变量，由 JSON `meta.edition` 驱动；本分支 SKILL.md 组装规则固定填「免费基础版」；`--validate` 校验 edition 合法性。两分支 `generate_report.py` 恢复逐字节一致
-2. **报告作者信息**：HTML 页脚新增「作者：Sean ｜ 微信：drdingno1 ｜ 邮箱：Cyrux.ding@outlook.sg」
-3. 文档：`html-report-guide.md` meta schema 新增 `edition` 字段；SKILL.md 第九步新增 2c 组装规则；版本号 v1.7.2 → v1.7.3
-
 ## v1.7.2 (2026-08-03)
 
 ### 术语统一「六神兽」+ 日空月空分离 + 卦象盘面（同构 main v1.8.2）

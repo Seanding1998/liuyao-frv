@@ -249,6 +249,7 @@ body {{
 
 /* 标题区 */
 .report-header {{ text-align: center; padding: 32px 0 24px; border-bottom: 2px solid #8b7355; margin-bottom: 32px; }}
+.report-header .author {{ font-size: 13px; color: #8a6d1a; font-weight: bold; margin-bottom: 14px; }}
 .report-header h1 {{ font-size: 28px; color: #5c3d2e; letter-spacing: 4px; margin-bottom: 8px; }}
 .edition-badge {{ display: inline-block; padding: 2px 14px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }}
 .edition-badge.pro {{ background: #fff3cd; color: #8a6d1a; border: 1px solid #d4b84a; }}
@@ -374,7 +375,6 @@ h3 {{ font-size: 16px; color: #6b5a4e; margin: 16px 0 8px; }}
 .report-footer {{ margin-top: 48px; padding-top: 24px; border-top: 1px solid #d4c5b2; text-align: center; font-size: 12px; color: #9e8b7a; }}
 .verify-stamp {{ font-size: 14px; color: #5c8a5c; margin-bottom: 8px; }}
 .disclaimer {{ margin-top: 12px; font-style: italic; }}
-.author {{ margin-top: 12px; font-size: 12px; color: #b0a090; }}
 
 /* 旺衰标记 */
 .ws-wang {{ color: #2e7d32; font-weight: bold; }}
@@ -412,6 +412,7 @@ function toggleCuoZong() {{
 
 <!-- 1. 标题区 -->
 <header class="report-header">
+  <p class="author">作者：Cyrux ｜ 微信：drdingno1 ｜ 邮箱：Cyrux.ding@outlook.sg</p>
   <h1>六爻卦象报告</h1>
   <p class="edition-badge {edition_class}">{edition_badge}</p>
   <p class="subtitle">本卦《{ben_gua}》　变卦《{bian_gua}》</p>
@@ -490,7 +491,6 @@ function toggleCuoZong() {{
   <p class="verify-stamp">{verify_result}</p>
   <p class="generate-time">报告生成时间：{generate_time}</p>
   <p class="disclaimer">此报告由 AI 六爻解卦 Skill 自动生成，供参考之用。六爻为传统决策辅助工具，不替代理性判断。</p>
-  <p class="author">作者：Sean ｜ 微信：drdingno1 ｜ 邮箱：Cyrux.ding@outlook.sg</p>
 </footer>
 
 </div>
