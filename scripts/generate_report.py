@@ -374,6 +374,7 @@ h3 {{ font-size: 16px; color: #6b5a4e; margin: 16px 0 8px; }}
 .report-footer {{ margin-top: 48px; padding-top: 24px; border-top: 1px solid #d4c5b2; text-align: center; font-size: 12px; color: #9e8b7a; }}
 .verify-stamp {{ font-size: 14px; color: #5c8a5c; margin-bottom: 8px; }}
 .disclaimer {{ margin-top: 12px; font-style: italic; }}
+.author {{ margin-top: 12px; font-size: 12px; color: #b0a090; }}
 
 /* 旺衰标记 */
 .ws-wang {{ color: #2e7d32; font-weight: bold; }}
@@ -412,7 +413,7 @@ function toggleCuoZong() {{
 <!-- 1. 标题区 -->
 <header class="report-header">
   <h1>六爻卦象报告</h1>
-  <p class="edition-badge free">六爻解卦 · 免费基础版</p>
+  <p class="edition-badge {edition_class}">{edition_badge}</p>
   <p class="subtitle">本卦《{ben_gua}》　变卦《{bian_gua}》</p>
   <p class="question">所问：{question}</p>
   <p class="date">占卦时间：{date}　农历{lunar}</p>
@@ -489,6 +490,7 @@ function toggleCuoZong() {{
   <p class="verify-stamp">{verify_result}</p>
   <p class="generate-time">报告生成时间：{generate_time}</p>
   <p class="disclaimer">此报告由 AI 六爻解卦 Skill 自动生成，供参考之用。六爻为传统决策辅助工具，不替代理性判断。</p>
+  <p class="author">作者：Sean ｜ 微信：drdingno1 ｜ 邮箱：Cyrux.ding@outlook.sg</p>
 </footer>
 
 </div>
@@ -771,6 +773,14 @@ def generate(data: dict, output_path: str) -> str:
     # 日空/月空分开展示（v1.8.2：支持独立字段与旧合并字符串两种格式）
     day_kong, yue_kong = split_kong_wang(meta)
 
+    # 套餐徽章（v1.8.3：由 meta.edition 传入，SKILL.md 组装时填写「高级版」/「免费基础版」）
+    edition = str(meta.get("edition", "")).strip()
+    if edition:
+        edition_badge = f"六爻解卦 · {edition}"
+        edition_class = "pro" if "高级" in edition else "free" if "免费" in edition else ""
+    else:
+        edition_badge, edition_class = "", ""
+
     # 补全变卦阴阳爻：非动爻 = 本卦阴阳爻, 动爻 = 翻转
     ben_lines = ben_lines_from_yao(yao)
     bian_lines = compute_bian_lines(ben_lines, yao)
@@ -818,6 +828,8 @@ def generate(data: dict, output_path: str) -> str:
         ri_chen=meta["ri_chen"],
         day_kong=day_kong,
         yue_kong=yue_kong,
+        edition_badge=edition_badge,
+        edition_class=edition_class,
         gua_panels_html=gua_panels_html,
         yao_rows=yao_rows_html,
         verdict_class=vcls,
@@ -921,6 +933,11 @@ def validate_json(data):
             content = md_full.get(step_key, "")
             if sig in str(content):
                 errors.append(f"md_full.{step_key} 含占位文本 '{sig}'，未注入真实解卦内容。")
+
+    # ── 套餐徽章校验（v1.8.3：meta.edition 若存在必须是 高级版/免费基础版；缺失时徽章不显示）──
+    edition = str(data.get("meta", {}).get("edition", "")).strip() if "meta" in data else ""
+    if edition and edition not in ("高级版", "免费基础版"):
+        errors.append(f"meta.edition 非法值 '{edition}'——必须为「高级版」或「免费基础版」（由 SKILL.md 组装时填写）。")
 
     # ── 动变方向↔五行生克一致性校验（🚨 防方向性错误：申=金→卯=木 是金克木=本爻克变爻，不是回头克）──
     DIZHI_WUXING = {

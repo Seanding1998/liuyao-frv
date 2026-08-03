@@ -5,7 +5,7 @@ description: |
   使用场景：六爻占卜、金钱卦、纳甲筮法、周易预测、起卦解卦。
 license: 个人免费·商业授权
 metadata:
-  version: "1.7.2"
+  version: "1.7.3"
   category: divination
 ---
 # 六爻解卦分析 Skill
@@ -693,6 +693,8 @@ D. references 清单一致性：检查每个步骤 md 的「本步已加载 refe
    ```
 
    > ⛔ **禁止压缩/总结/改写 md 原文**——`md_full` 以文件读取内容为准逐字填入（HTML 的「📜 解卦过程全文」附录板块直接展示它，这是用户能看到完整解卦逻辑的唯一途径）。`step7.final_verdict` 也必须完整承载步骤7 md 断语部分全文，不得摘要化。`--validate` 会检查 md_full 长度下限（step1~6 ≥ 50 字符、step7 ≥ 200 字符）——**低于下限 = 被压缩，直接报错阻断**。
+
+2c. **套餐标识（meta.edition）**：`meta` 必须填写 `"edition": "免费基础版"`（本分支固定值，禁止填错、禁止留空）。HTML 标题下的套餐徽章据此渲染，`--validate` 会校验其合法性。
 
 3. 将 JSON 写入 `{卦例目录}/liuyao-data.json`
 4. **写入后立即校验 JSON schema 完整性**（必须执行，不可跳过）：
