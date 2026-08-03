@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.7.0 (2026-08-03)
+
+### 智能体审查 — 断后校验从自检改为独立审查智能体
+
+**问题**：第八步断后校验由解卦 Agent 自己执行 A/B/C/D 四项检查并写校验报告——"运动员兼裁判"。旧版第八步最终检查点「16条有无不诚实标记」已自认软肋：自检报告无外部监督，存在掩盖问题直接交付的风险。
+
+**改造**：第八步「断后校验」→「智能体审查」。审查由独立审查智能体执行（Agent 工具启动 subagent，与解卦主流程上下文隔离），主流程只负责委派、接收报告、按报告修正、复审（上限 3 轮）。审查智能体只依据卦例目录落地文件（`步骤1-*.md`~`步骤7-*.md` + `paipan_result.json` patterns 权威数据）独立审查 A/B/C/D 四项，报告写入 `步骤8-断后校验.md`。第九步 `--validate` 机器校验层不变，与智能体审查互补。
+
+#### 文件改动
+
+| 文件 | 改动 |
+|------|------|
+| `SKILL.md` | 铁律 6「校验不可略」→「审查不可代」；第八步整节重写（审查智能体启动 prompt 模板 + 复审循环）；第九步准入条件同步；流程表第 8 行与 frontmatter 更新；版本号 v1.6.0 → v1.7.0 |
+| `references/jie-gua-xiang-jie.md` | 第八节标注「校验规则由独立审查智能体执行，主流程不得自查代替」 |
+| `CHANGELOG.md` | 本条目 |
+
+### 修复悬空 references 引用（剥离遗留）
+
+frv 剥离高级功能时删除了 3 个 reference 文件（`liuqin-liushen-leixiang.md`、`zonghe-yingyong-leixiang.md`、`64-gua-yongfa.md`），但 SKILL.md 的 intent 路由表与各步骤加载触发仍引用它们，会导致第八步审查 D 项（references 清单一致性）误报。本次按「references 中不存在的文件一律删除对应引用」原则清理：
+
+- **intent 路由表**：删除 `liuqin`/`zonghe`/`64-gua-yongfa` 全部引用；「学业」「词讼」两行引用全悬空 → 整行删除；其余行保留现存文件引用（`wuxing-shengke` / `bagua-leixiang` / `shier-dizhi-leixiang` / `te-shu-ge-ju` / `64-gua` / `yingqi-faze`）
+- **Tier 归类总表**：删除 5 行悬空条目（Tier A/C 的 liuqin 项、Tier E 的 zonghe/64-gua-yongfa 项）；Tier A/C 阶段说明改为指向 `jie-gua-xiang-jie.md` 第一节/第五节（frv 版用神识别与六神类象的承载文件）
+- **跨 intent 示例**：改写为引用现存文件的示例（健康/出行）
+- **步骤触发**：第四步 Tier C 触发、第五步"额外加载六神精细类象"、第七步 Tier E 触发与 zonghe 补读要求全部清理
+- **加载速查表**：删除「intent 对应生活场景」「intent=阳宅」「六十四卦爻象/阳宅灶门」「六亲/六神精细类象」4 个悬空行
+
+> ℹ️ 注：frv 的 CHANGELOG 自 v1.7.0 起与 main 版本号独立（frv 保留 main v1.7.x 的功能历史记录，版本号从 frv 1.6.0 起独立递增）。
+
 ## v1.7.2 (2026-07-22)
 
 ### 三会局状态机 v2 — 日月入组 + 旬空压制 + 四态判定
