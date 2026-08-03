@@ -257,8 +257,9 @@ body {{
 /* 信息条 */
 .info-bar {{ display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-bottom: 32px; }}
 .info-item {{ background: #fff; border: 1px solid #d4c5b2; border-radius: 6px; padding: 8px 16px; }}
-.info-item .label {{ font-size: 12px; color: #9e8b7a; display: block; }}
-.info-item .value {{ font-size: 16px; color: #5c3d2e; font-weight: bold; }}
+.info-item .label {{ font-size: 12px; color: #000; font-weight: bold; display: block; }}
+.info-item .value {{ font-size: 16px; color: #000; font-weight: bold; }}
+.info-item.kong-item .value {{ color: #c62828; }}
 
 /* ── 卦象面板 ── */
 .gua-panels {{ display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; justify-content: center; }}
@@ -419,8 +420,8 @@ function toggleCuoZong() {{
   <div class="info-item"><span class="label">变卦</span><span class="value">{bian_gua}</span></div>
   <div class="info-item"><span class="label">月建</span><span class="value">{yue_jian}</span></div>
   <div class="info-item"><span class="label">日辰</span><span class="value">{ri_chen}</span></div>
-  <div class="info-item"><span class="label">日空</span><span class="value">{day_kong}</span></div>
-  <div class="info-item"><span class="label">月空</span><span class="value">{yue_kong}</span></div>
+  <div class="info-item kong-item"><span class="label">日空</span><span class="value">{day_kong}</span></div>
+  <div class="info-item kong-item"><span class="label">月空</span><span class="value">{yue_kong}</span></div>
 </div>
 
 <!-- 3. 卦象盘面（三栏本变互 + 错综切换） -->
