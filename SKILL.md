@@ -3,7 +3,7 @@ name: liuyao-divination
 description: |
    专业六爻纳甲筮法排盘与解卦。自动起卦排盘，十步完整流程（第零步排盘→审题取用神→判定旺衰→追踪动变→伏神分析→世应关系→六神取象→应期推断→综合断语→智能体审查→HTML报告）。
   使用场景：六爻占卜、金钱卦、纳甲筮法、周易预测、起卦解卦。
-license: MIT
+license: 个人免费·商业授权
 metadata:
   version: "1.7.0"
   category: divination
