@@ -419,17 +419,18 @@ function toggleCuoZong() {{
   <div class="info-item"><span class="label">变卦</span><span class="value">{bian_gua}</span></div>
   <div class="info-item"><span class="label">月建</span><span class="value">{yue_jian}</span></div>
   <div class="info-item"><span class="label">日辰</span><span class="value">{ri_chen}</span></div>
-  <div class="info-item"><span class="label">旬空</span><span class="value">{kong_wang}</span></div>
+  <div class="info-item"><span class="label">日空</span><span class="value">{day_kong}</span></div>
+  <div class="info-item"><span class="label">月空</span><span class="value">{yue_kong}</span></div>
 </div>
 
-<!-- 3. 六爻盘面（三栏本变互 + 错综切换） -->
-<h2>六爻盘面</h2>
+<!-- 3. 卦象盘面（三栏本变互 + 错综切换） -->
+<h2>卦象盘面</h2>
 {gua_panels_html}
 
 <!-- 3b. 详细爻表 -->
 <h2>爻象详表</h2>
 <table class="yao-table">
-  <thead><tr><th>六神</th><th>本卦</th><th>变卦</th></tr></thead>
+  <thead><tr><th>六神兽</th><th>本卦</th><th>变卦</th></tr></thead>
   <tbody>
 {yao_rows}
   </tbody>
@@ -504,6 +505,36 @@ def verdict_css_class(qualitative: str) -> str:
     if any(w in qualitative for w in ("吉", "有利", "佳", "顺")): return "ji"
     if any(w in qualitative for w in ("凶", "不利", "败", "阻")): return "xiong"
     return "ping"
+
+
+def split_kong_wang(meta: dict):
+    """从 meta 解析日空/月空显示串（v1.8.2：日空月空分开展示）。
+
+    支持三种格式：
+    1. 新组装格式：kong_wang="寅卯"（日空）、yue_kong="巳午"（月空）——分开字段
+    2. paipan 自动适配格式：kong_wang="日空寅卯, 月空巳午"（合并字符串）
+    3. 旧合并格式：kong_wang="寅卯 巳午（月空）"
+    返回 (day_kong, yue_kong) 两个显示串。
+    """
+    day_kw = str(meta.get("kong_wang", "")).strip()
+    yue_kw = str(meta.get("yue_kong", "") or meta.get("yue_xunkong", "")).strip()
+
+    if not yue_kw and "月空" in day_kw:
+        # 旧合并格式 → 拆出日空与月空
+        import re
+        m_day = re.search(r"日空([\u4e00-\u9fff]+)", day_kw)
+        m_yue = re.search(r"月空[（(]?([\u4e00-\u9fff]+)", day_kw)
+        day_kw = m_day.group(1) if m_day else day_kw
+        yue_kw = m_yue.group(1) if m_yue else ""
+        if "（月空）" in day_kw and not yue_kw:
+            parts = day_kw.split("（月空）")[0].split()
+            if len(parts) >= 2:
+                day_kw, yue_kw = parts[0], parts[1]
+            else:
+                day_kw = parts[0]
+    day_kw = day_kw.strip("日空, ，（）()")
+    yue_kw = yue_kw.strip("月空, ，（）()")
+    return day_kw or "—", yue_kw or "—"
 
 
 def tag_html(tag_name: str, label: str) -> str:
@@ -683,7 +714,7 @@ STEP_NAMES = {
     "step3": "第三步 · 追踪动变",
     "step3_5": "第3.5步 · 伏神分析",
     "step4": "第四步 · 世应关系",
-    "step5": "第五步 · 六神取象",
+    "step5": "第五步 · 六神兽取象",
     "step6": "第六步 · 应期推断",
     "step7": "第七步 · 综合断语",
     "step8": "第八步 · 智能体审查",
@@ -732,12 +763,8 @@ def generate(data: dict, output_path: str) -> str:
     s7 = steps["step7"]
     s8 = steps["step8"]
 
-    # 合并空亡：若 meta 中存在 yue_kong 或 yue_xunkong 但 kong_wang 未包含月空，则自动合并
-    _kong = meta.get("kong_wang", "")
-    _yue_kong = meta.get("yue_kong", "") or meta.get("yue_xunkong", "")
-    if _yue_kong and "月空" not in str(_kong):
-        _kong = f"{_kong} {_yue_kong}（月空）".strip()
-        meta["kong_wang"] = _kong
+    # 日空/月空分开展示（v1.8.2：支持独立字段与旧合并字符串两种格式）
+    day_kong, yue_kong = split_kong_wang(meta)
 
     # 补全变卦阴阳爻：非动爻 = 本卦阴阳爻, 动爻 = 翻转
     ben_lines = ben_lines_from_yao(yao)
@@ -784,7 +811,8 @@ def generate(data: dict, output_path: str) -> str:
         lunar=meta.get("lunar", ""),
         yue_jian=meta["yue_jian"],
         ri_chen=meta["ri_chen"],
-        kong_wang=meta["kong_wang"],
+        day_kong=day_kong,
+        yue_kong=yue_kong,
         gua_panels_html=gua_panels_html,
         yao_rows=yao_rows_html,
         verdict_class=vcls,
