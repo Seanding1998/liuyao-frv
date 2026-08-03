@@ -360,6 +360,12 @@ h3 {{ font-size: 16px; color: #6b5a4e; margin: 16px 0 8px; }}
 /* 综合断语 */
 .final-verdict {{ background: #fff; border: 1px solid #d4c5b2; border-radius: 8px; padding: 24px; font-size: 15px; line-height: 2; white-space: pre-wrap; }}
 
+/* 解卦过程全文附录 */
+.step-full {{ background: #faf7f2; border: 1px solid #e8dfd2; border-radius: 8px; padding: 18px; font-size: 13px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; color: #4e3d2f; }}
+.md-full-section {{ margin-bottom: 20px; }}
+.md-full-section h3 {{ color: #5c3d2e; margin: 0 0 8px 0; font-size: 15px; }}
+.md-full-intro {{ color: #9e8b7a; font-size: 13px; margin-bottom: 16px; }}
+
 /* 页脚 */
 .report-footer {{ margin-top: 48px; padding-top: 24px; border-top: 1px solid #d4c5b2; text-align: center; font-size: 12px; color: #9e8b7a; }}
 .verify-stamp {{ font-size: 14px; color: #5c8a5c; margin-bottom: 8px; }}
@@ -469,7 +475,10 @@ function toggleCuoZong() {{
 <h2>综合断语</h2>
 {final_block}
 
-<!-- 11. 校验印记 -->
+<!-- 11. 解卦过程全文（md_full 附录，逐字保真） -->
+{md_full_block}
+
+<!-- 12. 校验印记 -->
 <footer class="report-footer">
   <p class="verify-stamp">{verify_result}</p>
   <p class="generate-time">报告生成时间：{generate_time}</p>
@@ -667,6 +676,48 @@ def build_final_block(step7: dict) -> str:
     return f'<div class="final-verdict">{step7["final_verdict"]}</div>'
 
 
+STEP_NAMES = {
+    "step0": "第零步 · 自动排盘",
+    "step1": "第一步 · 审题取用神",
+    "step2": "第二步 · 判定旺衰",
+    "step3": "第三步 · 追踪动变",
+    "step3_5": "第3.5步 · 伏神分析",
+    "step4": "第四步 · 世应关系",
+    "step5": "第五步 · 六神取象",
+    "step6": "第六步 · 应期推断",
+    "step7": "第七步 · 综合断语",
+    "step8": "第八步 · 智能体审查",
+}
+
+
+def build_md_full_block(md_full: dict) -> str:
+    """渲染「解卦过程全文」附录板块：逐字展示各步骤 md 原文（pre-wrap）。
+
+    md_full 缺失或为空时返回空字符串（板块自动隐藏，不报错）。
+    """
+    if not md_full:
+        return ""
+    sections = []
+    for key in ("step0", "step1", "step2", "step3", "step4", "step5", "step6", "step7"):
+        content = md_full.get(key)
+        if not content or not str(content).strip():
+            continue
+        name = STEP_NAMES.get(key, key)
+        sections.append(
+            '<div class="md-full-section">'
+            f'<h3>{name}</h3>'
+            f'<div class="step-full">{content}</div>'
+            '</div>'
+        )
+    if not sections:
+        return ""
+    return (
+        '<h2>📜 解卦过程全文</h2>'
+        '<p class="md-full-intro">以下为解卦各步骤的完整分析原文（与卦例目录中步骤 md 文件逐字一致），供复核完整推理过程。</p>'
+        + "\n".join(sections)
+    )
+
+
 def generate(data: dict, output_path: str) -> str:
     meta = data["meta"]
     yao = data["yao"]
@@ -722,6 +773,9 @@ def generate(data: dict, output_path: str) -> str:
     # 神煞渲染
     shensha_html = build_shensha_section(meta, yao)
 
+    # 解卦过程全文附录（md_full，缺失时自动隐藏板块）
+    md_full_block = build_md_full_block(data.get("md_full", {}))
+
     html = HTML_TEMPLATE.format(
         ben_gua=meta["ben_gua"],
         bian_gua=meta.get("bian_gua") or "静卦",
@@ -745,6 +799,7 @@ def generate(data: dict, output_path: str) -> str:
         patterns_block=patterns_html,
         shensha_block=shensha_html,
         final_block=build_final_block(s7),
+        md_full_block=md_full_block,
         verify_result=f"✅ {s8.get('final', s8.get('summary', '校验完成'))}",
         generate_time=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
@@ -807,6 +862,32 @@ def validate_json(data):
                     f"未注入真实解卦内容。请回到第九步：必须先按 html-report-guide.md "
                     f"schema 从步骤 md 文件组装完整 JSON，再跑 --validate。"
                 )
+
+    # ── md_full 全文保真校验（v1.8.1：防第九步组装时压缩/省略步骤 md 原文）──
+    # md_full 必须存在且逐字承载步骤 md 全文；长度低于下限 = 组装时被摘要化，阻断。
+    MD_FULL_MIN_LEN = {"step1": 50, "step2": 50, "step3": 50, "step4": 50,
+                       "step5": 50, "step6": 50, "step7": 200}
+    md_full = data.get("md_full")
+    if not isinstance(md_full, dict):
+        errors.append(
+            "缺少顶层字段 md_full（解卦过程全文附录）。第九步组装 JSON 时必须将步骤0~7 "
+            "md 文件内容逐字写入 md_full（如 {\"step1\": \"步骤1 md 全文\", ...}），"
+            "HTML 报告的「📜 解卦过程全文」板块依赖该字段。"
+        )
+    else:
+        for step_key, min_len in MD_FULL_MIN_LEN.items():
+            content = md_full.get(step_key, "")
+            if not content or not str(content).strip():
+                errors.append(f"md_full.{step_key} 为空——步骤 md 全文未注入，报告将丢失该步分析。")
+            elif len(str(content)) < min_len:
+                errors.append(
+                    f"md_full.{step_key} 仅 {len(str(content))} 字符（下限 {min_len}）——"
+                    f"疑似组装时被压缩/摘要化。必须逐字写入步骤 md 全文，禁止改写精简。"
+                )
+        for step_key, sig in (("step1", "未做解卦分析"), ("step7", "未做解卦分析")):
+            content = md_full.get(step_key, "")
+            if sig in str(content):
+                errors.append(f"md_full.{step_key} 含占位文本 '{sig}'，未注入真实解卦内容。")
 
     # ── 动变方向↔五行生克一致性校验（🚨 防方向性错误：申=金→卯=木 是金克木=本爻克变爻，不是回头克）──
     DIZHI_WUXING = {
@@ -972,6 +1053,7 @@ def main():
                     "step7": {"qualitative": "盘面报告", "basis": "由 paipan.py 自动排盘生成", "final_verdict": "此报告仅含排盘信息，未做解卦分析。请通过六爻解卦 Skill 九步法进行完整分析。", "trend": "", "action_advice": ""},
                     "step8": {"integrity": "", "cross_check": "", "principles": "", "final": "仅盘面，未校验"},
                 },
+                "md_full": {},
             }
         else:
             for key in ("meta", "yao", "steps"):

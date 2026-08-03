@@ -5,7 +5,7 @@ description: |
   使用场景：六爻占卜、金钱卦、纳甲筮法、周易预测、起卦解卦。
 license: 个人免费·商业授权
 metadata:
-  version: "1.7.0"
+  version: "1.7.1"
   category: divination
 ---
 # 六爻解卦分析 Skill
@@ -681,12 +681,25 @@ D. references 清单一致性：检查每个步骤 md 的「本步已加载 refe
    >
    > **跳过组装 = 步骤 4 的 `--validate` 会将你拦截下来**（见下方校验描述）。这不是「可选的 nice-to-have」——**这是第九步唯一正确的进入方式**。
 
+2b. **🚨 保真组装规则（v1.7.1 全文保真铁则）**：`steps` 各字段按 schema 摘要填写（板块展示用），但**必须同时**将 `步骤0-*.md` ~ `步骤7-*.md` 的**完整原文逐字**写入顶层 `md_full` 对象：
+
+   ```json
+   "md_full": {
+     "step0": "步骤0-自动排盘.md 全文（可选）",
+     "step1": "步骤1-审题取用神.md 全文（必填）",
+     ...,
+     "step7": "步骤7-综合断语.md 全文（必填）"
+   }
+   ```
+
+   > ⛔ **禁止压缩/总结/改写 md 原文**——`md_full` 以文件读取内容为准逐字填入（HTML 的「📜 解卦过程全文」附录板块直接展示它，这是用户能看到完整解卦逻辑的唯一途径）。`step7.final_verdict` 也必须完整承载步骤7 md 断语部分全文，不得摘要化。`--validate` 会检查 md_full 长度下限（step1~6 ≥ 50 字符、step7 ≥ 200 字符）——**低于下限 = 被压缩，直接报错阻断**。
+
 3. 将 JSON 写入 `{卦例目录}/liuyao-data.json`
 4. **写入后立即校验 JSON schema 完整性**（必须执行，不可跳过）：
    ```bash
    python <skill_dir>/scripts/generate_report.py -i "{卦例目录}/liuyao-data.json" --validate
    ```
-   > ⛔ 校验逻辑统一收敛到 `generate_report.py --validate` 子命令，**禁止在 SKILL.md 中写 inline Python heredoc**（跨平台引号转义易出错，且 schema 演进要改两处）。`--validate` 模式检查 `meta`/`yao`/`steps` 顶层域 + `step1`~`step8` 齐全 + `step5` 四个六神字段 + 每爻 `ben_yin_yang` + **🚨 占位内容检测**（若 step1.note 含"未做解卦分析"、step7.final_verdict 含"未做解卦分析"等占位文本 → 报错阻断）。
+   > ⛔ 校验逻辑统一收敛到 `generate_report.py --validate` 子命令，**禁止在 SKILL.md 中写 inline Python heredoc**（跨平台引号转义易出错，且 schema 演进要改两处）。`--validate` 模式检查 `meta`/`yao`/`steps` 顶层域 + `step1`~`step8` 齐全 + `step5` 四个六神字段 + 每爻 `ben_yin_yang` + **🚨 占位内容检测**（若 step1.note 含"未做解卦分析"、step7.final_verdict 含"未做解卦分析"等占位文本 → 报错阻断）+ **🚨 md_full 全文保真检测**（v1.7.1：缺失/为空/长度低于下限/含占位文本 → 报错阻断）。
    若校验失败（exit code=1），**不得继续**——先修正 JSON 中缺失的字段，重新校验通过后再进入步骤5。
 5. 调用本地 Python 脚本生成 HTML：
    ```bash
@@ -702,12 +715,13 @@ D. references 清单一致性：检查每个步骤 md 的「本步已加载 refe
 【第九步·输出】
 - 卦例目录：[{卦例目录}]
 - JSON 数据文件：[{卦例目录}/liuyao-data.json]
+- md_full 全文附录：[steps 1~7 已逐字注入 / ⚠️ 缺失]
 - 调用脚本：[命令]
 - 脚本输出：[stdout 关键行]
 - HTML 报告路径：[{卦例目录}/liuyao-report.html]
 ```
 
-**✅ 检查点**：第八步智能体审查是否确实通过？JSON 是否完整覆盖 `meta`/`yao`/`steps` 三个域？脚本是否成功执行？HTML 文件是否生成且大小正常？
+**✅ 检查点**：第八步智能体审查是否确实通过？JSON 是否完整覆盖 `meta`/`yao`/`steps`/`md_full` 四个域？md_full 是否逐字承载步骤 md 全文（抽查 1-2 句 md 独特内容确认出现在 JSON 中）？脚本是否成功执行？HTML 文件是否生成且大小正常（含「📜 解卦过程全文」附录板块）？
 
 ---
 
