@@ -1181,7 +1181,7 @@ def detect_patterns(ben_lines, yao_list, meta):
                 chong_pairs.append((y1, y2))
     if chong_pairs:
         detail = "、".join(f'{y1["di_zhi"]}({y1["liu_qin"]})冲{y2["di_zhi"]}({y2["liu_qin"]})' for y1, y2 in chong_pairs)
-        patterns.append({"name": "六冲", "level": "", "detail": f'卦中存在六冲关系：{detail}。冲则散而不聚，事多反复。', "css": "liuchong"})
+        patterns.append({"name": "六冲", "level": "", "detail": f'卦中存在六冲关系：{detail}。爻爻相冲，旺相者冲而不散，休囚者逢冲易散，吉凶须参用神旺衰。', "css": "liuchong"})
     
     # ── 本卦六冲卦检测 ──
     # 六冲卦判定：初四/二五/三上 三对爻位地支全部相冲
