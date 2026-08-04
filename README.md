@@ -116,4 +116,4 @@ HTML 报告使用内联 CSS，无需外部依赖，可直接在浏览器打开�
 
 ## 许可
 
-MIT License — 详见 [LICENSE](./LICENSE)
+个人免费·商业授权 — 详见 [LICENSE](./LICENSE)
