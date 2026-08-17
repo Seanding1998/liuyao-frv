@@ -7,8 +7,8 @@
 另覆盖：
 - GUA64 表 6 卦静态数据正确性（纳甲/六亲/世应）—— 修 v1.5.x 数据 bug 的回归保护
 - lines 数组驱动格局：三合局/三会局/六合/六冲/伏吟/反吟/独发/独静
-- 三合三会的 3 档状态（成局/半合/虚合；严格成局/三会之势/虚势）
-- 日月补字逻辑
+- 三合局 3 档（成局/半合/虚合）；三会局四态（严格成局/成局/三会/三会之势）
+- 日月补字/日月入组/空亡压制逻辑
 
 用法：
     python scripts/test_gua_patterns.py
@@ -190,33 +190,47 @@ def test_gua64_correctness(failures):
 
 
 # ═══════════════════════════════════════════════════════════════
-#  测试 2：三会局（sanhui_ju）— 3 档 + 动爻条件
+#  测试 2：三会局（sanhui_ju）— 四态 + 动爻条件 + 空亡压制 + 日月补字
 # ═══════════════════════════════════════════════════════════════
 def test_sanhui_ju(failures):
-    print(f"\n=== 测试 2：三会局（sanhui_ju）— 3 档状态 ===")
+    print(f"\n=== 测试 2：三会局（sanhui_ju）— 四态状态机 ===")
 
     all_dz = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
 
+    # 状态机（对齐 paipan.py detect_patterns）：
+    #   严格成局：≥3动，或 2动+日月补第三字
+    #   成局：≥1动无空亡，或 全静+日月入组+无旬空
+    #   三会：≥1动+有空亡（动不空，空在它爻）→ 出空成局
+    #   三会之势：全静+日月不在组，或 全静+日月入组+有旬空（空亡压死）
     case_count = 0
     for group in DIZHI_SANHUI_GROUPS:
         leftovers = [dz for dz in all_dz if dz not in group][:3]
-        # (动爻位列表, 期望状态, 描述)
+        # (动爻位列表, 期望状态, 描述, 空亡爻位)
         cases = [
-            ([1, 2, 3], "严格成局", "三支都动"),
-            ([1, 2],    "三会之势", "2 动 1 静"),
-            ([1],       "三会之势", "1 动 2 静"),
-            ([],        "虚势",     "三支全静"),
+            ([1, 2, 3], "严格成局", "三支都动", []),
+            ([1, 2],    "成局",     "2 动 1 静", []),
+            ([1],       "成局",     "1 动 2 静", []),
+            ([],        "三会之势", "三支全静", []),
+            ([1],       "三会",     "1 动 + 静爻空（出空成局）", [2]),
+            ([],        "三会之势", "全静 + 日月入组 + 空亡压死", [1]),
         ]
-        for dong_positions, expected_status, desc in cases:
+        for dong_positions, expected_status, desc, kong_positions in cases:
             lines = [
-                make_line(1, group[0], dong=(1 in dong_positions)),
-                make_line(2, group[1], dong=(2 in dong_positions)),
-                make_line(3, group[2], dong=(3 in dong_positions)),
+                make_line(1, group[0], dong=(1 in dong_positions),
+                          kong_wang=(1 in kong_positions)),
+                make_line(2, group[1], dong=(2 in dong_positions),
+                          kong_wang=(2 in kong_positions)),
+                make_line(3, group[2], dong=(3 in dong_positions),
+                          kong_wang=(3 in kong_positions)),
                 make_line(4, leftovers[0]),
                 make_line(5, leftovers[1]),
                 make_line(6, leftovers[2]),
             ]
-            result = detect_patterns(lines, "", "")
+            # 全静 + 日月入组 + 空亡压死：用日辰=group[0] 激活日月入组
+            if desc == "全静 + 日月入组 + 空亡压死":
+                result = detect_patterns(lines, "", "", ri_chen=group[0])
+            else:
+                result = detect_patterns(lines, "", "")
             matched = [s for s in result["sanhui_ju"] if s["group"] == "".join(group)]
             if not matched:
                 failures.append(
@@ -249,6 +263,25 @@ def test_sanhui_ju(failures):
         )
     case_count += 1
 
+    # 全静 + 日月入组 + 无旬空 → 成局（日月之力=动爻）
+    lines_sm2 = [
+        make_line(1, "巳"),
+        make_line(2, "午"),
+        make_line(3, "未"),
+        make_line(4, "寅"),
+        make_line(5, "卯"),
+        make_line(6, "申"),
+    ]
+    result = detect_patterns(lines_sm2, "", "", month_branch="", ri_chen="午")
+    matched = [s for s in result["sanhui_ju"] if s["group"] == "巳午未"]
+    if not matched:
+        failures.append("  ✗ 全静+日月入组三会局（巳午未 + 日辰午）未检测到")
+    elif matched[0]["status"] != "成局":
+        failures.append(
+            f"  ✗ 全静+日月入组三会局状态错误：期望 成局，实际 {matched[0]['status']}"
+        )
+    case_count += 1
+
     # 反例：缺一支不应记录
     lines_partial = [
         make_line(1, "亥"),
@@ -265,7 +298,8 @@ def test_sanhui_ju(failures):
         )
     case_count += 1
 
-    print(f"  4 组 × 4 种动爻组合 + 日月补字 + 缺支反例，共 {case_count} 用例")
+    print(f"  4 组 × 6 种动爻/空亡组合 + 日月补字 + 全静日月入组 + 缺支反例，"
+          f"共 {case_count} 用例")
 
 
 # ═══════════════════════════════════════════════════════════════
