@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.7.4 (2026-08-04)
+
+### 特殊格局分析强化（同构 main v1.8.4）
+
+1. **铁律11强化**（SKILL.md）：第七步综合断语对每个特殊格局必须逐一交代四要素（①成局/虚势状态 ②所强/所制之爻（六亲视角）③对用神吉凶 ④结果断语），禁止「只列不析」；第八步审查判据同步（只提及不分析 → 判⚠️漏判）
+2. **三合/三会局补断点方法论**（SKILL.md + references/di-zhi-relations.md）：定局五行 → 所强六亲 → 所强之爻 → 对用神吉凶链路；第三步模板强约束；第八步审查新增**逆向思维证伪**硬性要求
+3. **三合/三会细微区别补全**（references/di-zhi-relations.md）：贵派成局条件（一动+日月补齐）、半合子型、虚合/合绊、破局冲枢纽字、缺字应期、区别速查表
+4. **三合/三会规则经真实卦例校验**（references/di-zhi-relations.md）：三合缺字可被变爻补全（解读层标注）、半合带旬空打折（动爻空不减力）、三会成员仅计主卦爻
+5. **六冲关系描述细化**（scripts/generate_report.py）：旺相者冲而不散、休囚者逢冲易散，吉凶须参用神旺衰
+
+## v1.7.3 (2026-08-03)
+
+### 套餐徽章模板变量化 + 报告作者信息（同构 main v1.8.3）
+
+1. **徽章文本模板变量化**：`generate_report.py` 改用 `{edition_badge}` / `{edition_class}` 变量，由 JSON `meta.edition` 驱动；本分支 SKILL.md 组装规则固定填「免费基础版」；`--validate` 校验 edition 合法性。两分支 `generate_report.py` 恢复逐字节一致
+2. **报告作者信息移至报告顶部**（Cyrux）：HTML 标题区新增作者行「作者：Cyrux ｜ 微信：drdingno1 ｜ 邮箱：Cyrux.ding@outlook.sg」，页脚作者行移除
+3. **`yue_kong` 必填说明修正**：月柱必有旬空，不得省略——最多与日空相同（日月同旬）也须单独填写（references/html-report-guide.md meta schema）
+4. 文档：`html-report-guide.md` meta schema 新增 `edition` 字段；SKILL.md 第九步新增 2c 组装规则；版本号 v1.7.2 → v1.7.3
+
 ## v1.7.2 (2026-08-03)
 
 ### 术语统一「六神兽」+ 日空月空分离 + 卦象盘面（同构 main v1.8.2）
