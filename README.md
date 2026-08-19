@@ -2,7 +2,7 @@
 
 > 专业六爻纳甲筮法排盘 + 解卦工具。自动摇卦排盘 → 十步法逐层分析 → 可交付的 HTML 卦象报告。
 >
-> 开源免费版 v1.8.0 · MIT License
+> 开源免费版 v1.8.0 · 个人免费·商业授权
 
 ## 快速开始
 
@@ -82,7 +82,7 @@ HTML 报告使用内联 CSS，无需外部依赖，可直接在浏览器打开�
 ├── SKILL.md               # Claude Code Skill 定义（十步解卦流程）
 ├── README.md              # 本文件
 ├── CHANGELOG.md           # 版本历史
-├── LICENSE                # MIT
+├── LICENSE                # 个人免费·商业授权
 ├── scripts/
 │   ├── paipan.py          # 三币摇卦 + sxtwl 四柱 + 排盘
 │   ├── generate_report.py # HTML 报告生成器
