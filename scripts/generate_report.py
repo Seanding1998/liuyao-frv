@@ -334,6 +334,19 @@ body {{
 .wx-火 {{ color: #c94c4c; }}
 .wx-土 {{ color: #8b7355; }}
 
+/* 旺相休囚死（v1.9.0 五行之气月令流转，高级版与免费版同显） */
+.wxs-sub  {{ font-size: 13px; color: #9e8b7a; margin: 4px 0 12px; }}
+.wxs-row  {{ display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 32px; }}
+.wxs-card {{ flex: 1; min-width: 130px; max-width: 170px; background: #faf7f2; border: 1px solid #d4c5b2; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; line-height: 1.2; }}
+.wxs-card .wxs-name  {{ font-size: 18px; font-weight: bold; }}
+.wxs-card .wxs-state {{ font-size: 15px; font-weight: bold; letter-spacing: 1px; }}
+/* 五行字色（低饱和，统一浅宣纸背景；金为白字以深色描边保证可见） */
+.wxs-mu   {{ color: #4d8a5e; }}
+.wxs-huo  {{ color: #b0554a; }}
+.wxs-tu   {{ color: #93752f; }}
+.wxs-jin  {{ color: #fffdf5; text-shadow: 1px 1px 0 #6b5a4e, -1px -1px 0 #6b5a4e, 1px -1px 0 #6b5a4e, -1px 1px 0 #6b5a4e; }}
+.wxs-shui {{ color: #333f47; }}
+
 /* 定性框 */
 .verdict-box {{ padding: 20px; border-radius: 8px; margin-bottom: 32px; text-align: center; }}
 .verdict-box.ji {{ background: #e8f5e9; border: 1px solid #81c784; }}
@@ -442,6 +455,9 @@ function toggleCuoZong() {{
 {yao_rows}
   </tbody>
 </table>
+
+<!-- 3b2. 旺相休囚死（五行之气月令流转，高级版与免费版同显） -->
+{wang_shuai_block}
 
 <!-- 3c. 特殊格局 -->
 {patterns_block}
@@ -832,6 +848,7 @@ def generate(data: dict, output_path: str) -> str:
         edition_class=edition_class,
         gua_panels_html=gua_panels_html,
         yao_rows=yao_rows_html,
+        wang_shuai_block=build_wang_shuai_block(meta),
         verdict_class=vcls,
         qualitative=qualitative,
         basis=s7["basis"],
@@ -1120,6 +1137,8 @@ def main():
         content = f.read()
     sections = ["report-header", "info-bar", "gua-panels", "yao-table", "verdict-box",
                 "用神分析", "动变解析", "世应关系", "六神兽提点", "应期推断"]
+    # v1.9.0：高级版与免费版同显「旺相休囚死」板块（wxs-row）
+    sections.append("wxs-row")
     found = sum(1 for s in sections if s in content)
     print(f"   板块完整性: {found}/{len(sections)}")
 
@@ -1272,6 +1291,41 @@ def build_shensha_section(meta, yao_list):
         return ""
     
     return "\n".join(parts)
+
+
+# ── 旺相休囚死（v1.9.0）────────────────────────────────────
+
+# 月建地支 → 五行
+DZ_TO_WX = {"寅": "木", "卯": "木", "巳": "火", "午": "火", "申": "金", "酉": "金",
+            "亥": "水", "子": "水", "辰": "土", "戌": "土", "丑": "土", "未": "土"}
+WX_SHENG = {"木": "火", "火": "土", "土": "金", "金": "水", "水": "木"}      # 我生 → 相
+WX_SHENG_WO = {"木": "水", "火": "木", "土": "火", "金": "土", "水": "金"}   # 生我 → 休
+WX_KE_WO = {"木": "金", "火": "水", "土": "木", "金": "火", "水": "土"}      # 克我 → 囚
+WX_KE = {"木": "土", "土": "水", "水": "火", "火": "金", "金": "木"}          # 我克 → 死
+WXS_CLS = {"木": "wxs-mu", "火": "wxs-huo", "土": "wxs-tu", "金": "wxs-jin", "水": "wxs-shui"}
+STATE_ORDER = ["旺", "相", "休", "囚", "死"]  # 展示顺序：能量从高到低
+
+
+def build_wang_shuai_block(meta: dict) -> str:
+    """旺相休囚死板块：按能量从高到低（旺相休囚死）展示五行之气在月令下的流转。
+
+    v1.9.0 高级版与免费版同显（frv 已同步放开门控）。
+    """
+    month_branch = str(meta.get("yue_jian", "")).strip()
+    month_wx = DZ_TO_WX.get(month_branch, "")
+    if not month_wx:
+        return ""
+    states = {month_wx: "旺", WX_SHENG[month_wx]: "相", WX_SHENG_WO[month_wx]: "休",
+              WX_KE_WO[month_wx]: "囚", WX_KE[month_wx]: "死"}
+    cards = "".join(
+        f'<div class="wxs-card {WXS_CLS[wx]}"><span class="wxs-name">{wx}</span>'
+        f'<span class="wxs-state">{states[wx]}</span></div>'
+        for wx in sorted(states, key=lambda w: STATE_ORDER.index(states[w])))
+    return (f'<h2>旺相休囚死</h2>'
+            f'<p class="wxs-sub">{month_branch}月{month_wx}当令 · 当令者旺，令生者相，生令者休，克令者囚，令克者死</p>'
+            f'<div class="wxs-row">{cards}</div>')
+
+
 if __name__ == "__main__":
     main()
 
