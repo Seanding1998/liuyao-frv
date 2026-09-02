@@ -14,7 +14,7 @@
 
 | 支付宝 | 微信支付 | Touch 'n Go |
 | :---: | :---: | :---: |
-| <img src="docs/alipay.jpg" width="170" alt="支付宝收款码"> | <img src="docs/wechat.jpg" width="170" alt="微信支付收款码"> | <img src="docs/touch-n-go.jpg" width="170" alt="Touch 'n Go 收款码"> |
+| <img src="docs/alipay.jpg" width="204" alt="支付宝收款码"> | <img src="docs/wechat.jpg" width="204" alt="微信支付收款码"> | <img src="docs/touch-n-go.jpg" width="204" alt="Touch 'n Go 收款码"> |
 
 </div>
 
