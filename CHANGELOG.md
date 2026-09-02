@@ -1,5 +1,65 @@
 # Changelog
 
+## 当前维护重点索引
+
+- **版本同步**：`SKILL.md metadata.version` 是唯一权威；同步 README 当前版本、CHANGELOG 顶部版本、HTML guide 脚本版本、`generate_report.py` 文件头和 CLI description。
+- **格局检测**：重点回看 v1.5.7、v1.6.1、v1.7.2、v1.8.1；格局以 `paipan.py detect_patterns()` 输出的 JSON `patterns` 为准。
+- **HTML 空报告防护**：重点回看 v1.8.1、v1.8.4、v2.0.1；第九步必须从步骤 md 组装 `steps` 与 `md_full`。
+- **reference 假读防护**：重点回看 v1.5.11、v1.6.0、v1.8.4；加载清单必须含关键句摘录。
+- **编码问题**：重点回看 v1.5.3；Windows 验证先设置 `PYTHONIOENCODING=utf-8`。
+- **应期分层校验**：重点回看 v1.8.2、v1.8.3、v1.8.4；第六步必须输出主应期、辅助节点、风险窗口三层。
+- **规则编号检索**：见 `references/rule-index.md`；`TL-*` 为 SKILL.md 铁律，`PR-*` 为 `jie-gua-xiang-jie.md` 核心原则。
+
+## v2.0.1 (2026-09-01)
+
+### 维护界面与发布治理升级
+
+> 本版本不削弱规则，不重写断法，不改变排盘、格局检测、HTML schema 或第八步审查语义；目标是让强规则更好维护、更容易巡检、更不容易版本漂移。
+
+- `SKILL.md`：版本升至 v2.0.1；新增「设计意图与读法」，说明本 Skill 是防弱 AI 出错型生产规程，不是轻量提示词。
+- `SKILL.md`：全局铁律按维护视角分为运行协议、数据权威、判断完整性、审查协议、表达规范；保留铁律 1~16 的编号、规则本体和强制语气。
+- `SKILL.md`：给铁律 6、8、11、13、14、15 增加「防错目的」，解释独立审查、落盘、格局深断、JSON patterns 单一权威、路由表优先、每步自检门禁分别防什么错。
+- `SKILL.md`：步骤内强制加载提醒增加「执行复述 / 完整源点」标记，明确文末「参考资料加载规则」仍是加载条件的单一权威表。
+- `README.md`：新增「维护者速览」和「发布前检查清单」，固定 Windows PowerShell 下的 UTF-8 验证命令，避免中文输出被 GBK 误判。
+- `references/rule-index.md`：新增规则编号注册表，统一登记 TL 铁律与 PR 核心原则的定义源、相关文件、防错目的和维护备注。
+- `scripts/check_release_consistency.py`：新增发布一致性检查脚本，以 `SKILL.md metadata.version` 为权威检查 README、CHANGELOG、HTML guide、`generate_report.py` 文件头和 CLI description。
+- `scripts/generate_report.py` 与 `references/html-report-guide.md`：同步当前脚本版本展示到 v2.0.1，修复 CLI description 残余版本漂移。
+
+## v1.8.4 (2026-09-02)
+
+### 应期分层冲突修正（同构 main v1.9.4，frv 范围）
+
+- `SKILL.md`：第六步强制加载 `yingqi-faze.md` 全文，修复“要求使用场景应期角色分层表但加载规则不保证读表”的冲突；第六步输出模板细化三层排序写法。
+- `references/html-report-guide.md` 与 `scripts/generate_report.py`：新增 `step6.layers` 结构化字段，HTML 单独展示主应期、辅助节点、风险窗口，避免把三层排序塞进 `window/detail`。
+- `scripts/generate_report.py --validate`：从全文关键词扫描改为按 `layers.main`、`layers.auxiliary`、`layers.risk` 分层校验；校验表仅覆盖本分支已支持 intent，不带入全功能版专属场景。
+- `references/yingqi-faze.md`：明确场景表是检查清单而非死板取用；角色不现或不适用时必须在对应层说明理由，不可留空。
+
+## v1.8.3 (2026-09-02)
+
+### 应期分层能力泛化（同构 main v1.9.3，frv 范围）
+
+- `references/yingqi-faze.md`：新增「场景应期角色分层表」，覆盖求财、官运、学业、感情、健康、出行、失物、词讼、天气、通用；不引入全功能版专属 intent。
+- `SKILL.md` 与 `references/jie-gua-xiang-jie.md`：明确官运/跳槽只是样例，本分支所有已支持 intent 都要读取场景表；跨 intent 问法取并集，不得把辅助节点平铺成主窗口。
+- `scripts/generate_report.py --validate`：从官运专项检查升级为按 intent 的角色分层检查；已知 intent 若漏掉关键角色层，会在生成前被拦截。
+- `references/html-report-guide.md`、`README.md`：同步 v1.8.3 schema 与版本说明。
+
+## v1.8.2 (2026-09-02)
+
+### 特殊格局重点展示与应期排序修正（同构 main v1.9.2，frv 范围）
+
+- `scripts/generate_report.py`：特殊格局深断与 `md_full` 全文附录支持 `**重点**` 安全渲染为加粗；特殊格局首页增加重点样式，避免整段深断没有视觉层级。
+- `SKILL.md`：铁律 11 要求每个特殊格局最终断语标出一处重点；第六步新增「主应期 / 辅助节点 / 风险窗口」三层排序，避免把所有触发地支平铺为同等窗口。
+- `references/jie-gua-xiang-jie.md`、`references/yingqi-faze.md`：补强用神临值月/日规则；官运/跳槽分清官鬼职位、父母 offer/合同、妻财待遇；不引入全功能版专属场景库。
+- `references/html-report-guide.md`、`README.md`：同步 v1.8.2 展示与应期输出说明。
+
+## v1.8.1 (2026-09-02)
+
+### 特殊格局深断改造（同构 main v1.9.1，frv 范围）
+
+1. **规则**：铁律 11 升级为「十项深断模板」，要求特殊格局交代来源、类型、参与者、角色归属、合冲/成局产物、力量状态、对用神、对世应、应期、结果断语。
+2. **判法**：`references/di-zhi-relations.md` 补齐六合/六冲深断模板；`references/jie-gua-xiang-jie.md` 同步审查规则。保留 frv reference 边界，不引入 `zonghe-yingyong-leixiang.md`、`64-gua-yongfa.md`。
+3. **HTML 与校验**：`scripts/generate_report.py` 的特殊格局板块优先展示 `step3.pattern` 人工深断文本，自动检测摘要只作兜底；`--validate` 拦截「合则牵缠」「冲则变动」等浅套话。
+
 ## v1.8.0 (2026-08-19)
 
 ### HTML 报告新增「旺相休囚死」能量展示板块（同构 main v1.9.0）
@@ -413,7 +473,7 @@ v1.5.11 条目中「零行为变更」改为「变更范围澄清」，准确描
 - SKILL.md 第三步强加载块新增触发条件：上述字段任一为 true → 加载 `references/64-gua.md`
 
 **三个孤儿文件按场景精准触发**（用户选择"按场景精准触发"策略，非流程必读）：
-- `wuxing-shengke.md`（核查后非真孤儿——`jie-gua 第二节` 不含旺相休囚死表/六亲派生/纳音）：列入求财/健康/孕产 intent 路由表预读
+- `wuxing-shengke.md`（核查后非真孤儿——`jie-gua 第二节` 不含旺相休囚死表/六亲派生/纳音）：列入求财/健康 intent 路由表预读
 - `64-gua.md`：第三步检测到游魂/归魂时强触发；阳宅 intent 路由表预读
 - `64-gua-yongfa.md` 第五节：阳宅 intent 专属强触发
 
@@ -664,7 +724,7 @@ v1.5.11 条目中「零行为变更」改为「变更范围澄清」，准确描
 ### 新增
 - **自动排盘功能**：新增 `scripts/paipan.py` 自包含排盘脚本，合并 LiuYao 项目 `data.py` + `divination.py` 全部逻辑
 - **第零步·自动排盘**：Skill 现在主动提问→分析意图/用神→三币摇卦→sxtwl 四柱计算→定卦→产出结构化 JSON，全程无需外部排盘系统
-- **intent→用神速查表**：11 类意图（求财/官运/学业/感情/健康/孕产/出行/失物/词讼/天气/通用）的主用神与辅助用神一目了然
+- **intent→用神速查表**：10 类意图（求财/官运/学业/感情/健康/出行/失物/词讼/天气/通用）的主用神与辅助用神一目了然
 - **排盘脚本 CLI**：支持 `--subject`/`--intent`/`--yao`（手动六爻）/日期参数，三币随机或手动指定均可
 
 ### 变更

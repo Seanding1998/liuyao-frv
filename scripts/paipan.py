@@ -13,7 +13,7 @@
   python paipan.py --subject "所问之事" [--intent "意图类别"] [--year YYYY --month MM --day DD --hour HH --minute MM] [--yao "111111"]
 
   --subject  所占之事（必填）
-  --intent   意图类别：求财|官运|学业|感情|健康|孕产|出行|失物|词讼|天气|通用（默认通用）
+  --intent   意图类别：求财|官运|学业|感情|健康|出行|失物|词讼|天气|通用（默认通用）
   --yao      手动六爻编码（6位 1-4 字符串，自下而上），不提供则随机生成
   --year     公历年（默认当前）
   --month    公历月
@@ -62,7 +62,35 @@ DIZHI_INDEX = {dz: i + 1 for i, dz in enumerate(DIZHI)}   # 子=1 … 亥=12
 TIANGAN_INDEX = {tg: i + 1 for i, tg in enumerate(TIANGAN)}  # 甲=1 … 癸=10
 
 # 有效的 intent 类别
-VALID_INTENTS = {"求财", "官运", "学业", "感情", "健康", "孕产", "出行", "失物", "词讼", "天气", "通用"}
+VALID_INTENTS = {"求财", "官运", "学业", "感情", "健康", "出行", "失物", "词讼", "天气", "通用"}
+
+PREGNANCY_BLOCK_KEYWORDS = (
+    "孕产", "怀孕", "有孕", "妊娠", "胎产", "胎儿", "胚胎", "保胎", "流产",
+    "生产", "分娩", "临盆", "坐月子", "预产期", "产检", "孕妇", "宝宝性别",
+    "胎儿性别", "生男生女",
+)
+PREGNANCY_GENDER_KEYWORDS = (
+    "性别", "男女", "男孩", "女孩", "男宝", "女宝", "儿子", "女儿",
+    "生男", "生女", "是男是女", "蓝粉", "粉蓝", "宝宝性别", "胎儿性别",
+)
+
+
+def is_pregnancy_blocked_request(subject: str, intent: str) -> bool:
+    """frv gate: pregnancy/childbirth requests are blocked before paipan."""
+    text = f"{subject or ''} {intent or ''}"
+    return intent == "孕产" or any(keyword in text for keyword in PREGNANCY_BLOCK_KEYWORDS)
+
+
+def is_pregnancy_gender_request(subject: str, intent: str) -> bool:
+    text = f"{subject or ''} {intent or ''}"
+    return any(keyword in text for keyword in PREGNANCY_GENDER_KEYWORDS)
+
+
+def pregnancy_block_message(subject: str, intent: str) -> str:
+    message = "这个问题我不能用六爻来占。孕产相关问题请优先听医生和专业产检意见，祝平安顺利。"
+    if is_pregnancy_gender_request(subject, intent):
+        message += " 也温柔提醒：宝宝的性别不该影响被期待和被善待的程度，更不能服务重男轻女。"
+    return message
 
 # ── 宫→五行（用于变卦六亲按本卦宫重算）──────────────
 _GONG_WUXING = {
@@ -1321,7 +1349,7 @@ def main():
     )
     parser.add_argument("--subject", required=True, help="所占之事（必填）")
     parser.add_argument("--intent", default="通用",
-                        help="意图类别：求财|官运|学业|感情|健康|孕产|出行|失物|词讼|天气|通用")
+                        help="意图类别：求财|官运|学业|感情|健康|出行|失物|词讼|天气|通用")
     parser.add_argument("--yao", default=None,
                         help="手动六爻编码（6位1-4，自下而上；不提供则三币随机）")
     parser.add_argument("--manual", action="store_true",
@@ -1342,6 +1370,10 @@ def main():
     # seed 植入（仅影响自动摇卦；--yao 手动模式不受影响）
     if args.seed is not None and not args.yao:
         random.seed(args.seed)
+
+    if is_pregnancy_blocked_request(args.subject, args.intent):
+        print(pregnancy_block_message(args.subject, args.intent), file=sys.stderr)
+        sys.exit(2)
 
     # 校验 intent
     if args.intent not in VALID_INTENTS:

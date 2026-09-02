@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""六爻卦象 HTML 报告生成器 v1.4。
+"""六爻卦象 HTML 报告生成器 v2.0.1。
 
 新增:
 - 本卦/变卦/互卦 三栏盘面展示
 - 错卦/综卦 切换按钮
 - 变卦完整阴阳爻显示
+- 特殊格局板块优先展示第三步深断文本，自动检测摘要仅作兜底
 
 用法:
     python generate_report.py --input data.json --output report.html
@@ -12,10 +13,113 @@
 """
 
 import argparse
+import html
 import json
 import os
+import re
 import sys
 from datetime import datetime
+
+PREGNANCY_BLOCK_KEYWORDS = (
+    "孕产", "怀孕", "有孕", "妊娠", "胎产", "胎儿", "胚胎", "保胎", "流产",
+    "生产", "分娩", "临盆", "坐月子", "预产期", "产检", "孕妇", "宝宝性别",
+    "胎儿性别", "生男生女",
+)
+PREGNANCY_GENDER_KEYWORDS = (
+    "性别", "男女", "男孩", "女孩", "男宝", "女宝", "儿子", "女儿",
+    "生男", "生女", "是男是女", "蓝粉", "粉蓝", "宝宝性别", "胎儿性别",
+)
+
+
+def is_pregnancy_blocked_request(question: str, intent: str) -> bool:
+    """frv gate: reject pregnancy/childbirth reports during validation."""
+    text = f"{question or ''} {intent or ''}"
+    return intent == "孕产" or any(keyword in text for keyword in PREGNANCY_BLOCK_KEYWORDS)
+
+
+def is_pregnancy_gender_request(question: str, intent: str) -> bool:
+    text = f"{question or ''} {intent or ''}"
+    return any(keyword in text for keyword in PREGNANCY_GENDER_KEYWORDS)
+
+
+def pregnancy_block_message(question: str, intent: str) -> str:
+    message = "frv 门禁：不能生成孕产相关六爻报告，请优先参考医生和专业产检意见。"
+    if is_pregnancy_gender_request(question, intent):
+        message += " 宝宝的性别不该影响被期待和被善待的程度，更不能服务重男轻女。"
+    return message
+
+
+def render_text_with_emphasis(text: str) -> str:
+    """Escape text and render the report's tiny safe Markdown subset."""
+    escaped = html.escape(str(text or ""))
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped, flags=re.S)
+
+
+def normalize_layer_text(value) -> str:
+    """Flatten a layer value from string/list/dict into text for display/checks."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        return "；".join(str(item).strip() for item in value if str(item).strip())
+    if isinstance(value, dict):
+        return "；".join(str(v).strip() for v in value.values() if str(v).strip())
+    return str(value).strip()
+
+
+SCENARIO_YINGQI_LAYER_REQUIREMENTS = {
+    "求财": {
+        "main": (("妻财", "财"), "财物/收益主应期"),
+        "auxiliary": (("子孙", "原神", "财源", "项目", "父母"), "财源/项目/生财条件"),
+        "risk": (("兄弟", "忌神", "仇神", "破财", "耗财"), "竞争/破财风险"),
+    },
+    "官运": {
+        "main": (("官鬼", "职位", "岗位", "功名"), "职位/岗位/功名主应期"),
+        "auxiliary": (("父母", "文书", "offer", "合同", "审批", "证照", "妻财", "待遇", "薪资", "俸禄"), "文书流程或待遇节点"),
+        "risk": (("子孙", "兄弟", "忌神", "竞争", "化退", "化空", "化破"), "克官/竞争/退空破风险"),
+    },
+    "学业": {
+        "main": (("父母", "考试", "论文", "证书", "学位"), "考试/论文/证书主应期"),
+        "auxiliary": (("官鬼", "名次", "录取", "资格", "子孙", "发挥"), "名次录取或发挥节点"),
+        "risk": (("妻财", "兄弟", "忌神", "分心", "耗学", "合住", "冲破", "化退"), "耗学/分心/文书受损风险"),
+    },
+    "感情": {
+        "main": (("妻财", "官鬼", "对象", "配偶", "感情用神"), "关系对象主应期"),
+        "auxiliary": (("应爻", "世应", "父母", "子孙", "沟通", "婚书", "流程"), "对方回应/沟通/关系流程节点"),
+        "risk": (("兄弟", "竞争", "阻隔", "冲散", "多现", "忌神"), "竞争/阻隔/冲散风险"),
+    },
+    "健康": {
+        "main": (("子孙", "医药", "康复", "治疗"), "医药/康复主应期"),
+        "auxiliary": (("原神", "父母", "检查", "报告", "安排", "药力", "体力"), "检查治疗或体力药力节点"),
+        "risk": (("官鬼", "病", "忌神", "冲克", "化空", "化破"), "病症/忌神发作风险"),
+    },
+    "出行": {
+        "main": (("世爻", "驿马", "出行", "启程", "迁动"), "自身行动/启程迁动主应期"),
+        "auxiliary": (("应爻", "目的地", "接应", "父母", "票证", "手续", "妻财", "费用"), "目的地/票证手续/费用节点"),
+        "risk": (("忌神", "官鬼", "白虎", "灾煞", "六合", "绊住", "冲破"), "路途阻滞/风险窗口"),
+    },
+    "失物": {
+        "main": (("妻财", "父母", "失物", "财物", "文书", "票证", "本体"), "失物本体主应期"),
+        "auxiliary": (("子孙", "线索", "寻回", "世应", "伏神", "出伏"), "线索/寻回/露面节点"),
+        "risk": (("官鬼", "兄弟", "盗", "占有", "入墓", "化空", "被合藏"), "盗失/占有/藏匿风险"),
+    },
+    "词讼": {
+        "main": (("官鬼", "官方", "裁断", "处罚", "判决"), "官方裁断主应期"),
+        "auxiliary": (("父母", "证据", "文书", "流程", "世应", "攻守"), "证据文书/双方攻守节点"),
+        "risk": (("克世", "应爻", "兄弟", "口舌", "风险", "文书受破"), "克世/口舌/文书破损风险"),
+    },
+    "天气": {
+        "main": (("父母", "妻财", "子孙", "雨", "晴", "天气"), "雨晴转变主应期"),
+        "auxiliary": (("官鬼", "雷电", "风暴", "兄弟", "风", "日月"), "雷电风云/日月入局节点"),
+        "risk": (("官鬼", "风暴", "久雨", "受克", "难开"), "风暴加剧/久雨难晴风险"),
+    },
+    "通用": {
+        "main": (("世爻", "所问主体", "指定用神", "主用神"), "自身/所问主体主应期"),
+        "auxiliary": (("应爻", "原神", "辅助", "条件", "对方"), "外部对象/辅助条件节点"),
+        "risk": (("忌神", "仇神", "阻力", "风险"), "阻力/风险窗口"),
+    },
+}
 
 # ── 卦符映射 ────────────────────────────────────────────────
 GUA_FU = {"阳": "▅▅▅▅▅", "阴": "▅▅\u3000▅▅"}
@@ -334,7 +438,7 @@ body {{
 .wx-火 {{ color: #c94c4c; }}
 .wx-土 {{ color: #8b7355; }}
 
-/* 旺相休囚死（v1.9.0 五行之气月令流转，高级版与免费版同显） */
+/* 旺相休囚死（v1.9.0 五行之气月令流转） */
 .wxs-sub  {{ font-size: 13px; color: #9e8b7a; margin: 4px 0 12px; }}
 .wxs-row  {{ display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 32px; }}
 .wxs-card {{ flex: 1; min-width: 130px; max-width: 170px; background: #faf7f2; border: 1px solid #d4c5b2; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; line-height: 1.2; }}
@@ -380,6 +484,11 @@ h3 {{ font-size: 16px; color: #6b5a4e; margin: 16px 0 8px; }}
 
 /* 解卦过程全文附录 */
 .step-full {{ background: #faf7f2; border: 1px solid #e8dfd2; border-radius: 8px; padding: 18px; font-size: 13px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; color: #4e3d2f; }}
+.step-full strong {{ color: #6d3518; background: #fff1d6; border-radius: 4px; padding: 1px 4px; font-weight: 700; }}
+.pattern-deep {{ border-left: 4px solid #c49a3c; }}
+.pattern-deep strong {{ color: #7a2f0f; background: #ffe7ba; }}
+.yingqi-layers {{ margin-top: 12px; padding: 12px 16px; }}
+.yingqi-layers p {{ margin: 6px 0; }}
 .md-full-section {{ margin-bottom: 20px; }}
 .md-full-section h3 {{ color: #5c3d2e; margin: 0 0 8px 0; font-size: 15px; }}
 .md-full-intro {{ color: #9e8b7a; font-size: 13px; margin-bottom: 16px; }}
@@ -456,7 +565,7 @@ function toggleCuoZong() {{
   </tbody>
 </table>
 
-<!-- 3b2. 旺相休囚死（五行之气月令流转，高级版与免费版同显） -->
+<!-- 3b2. 旺相休囚死（五行之气月令流转） -->
 {wang_shuai_block}
 
 <!-- 3c. 特殊格局 -->
@@ -672,7 +781,7 @@ def build_dong_bian_block(step3: dict) -> str:
         parts.append(f'<p><strong>变化性质：</strong>{d["change_type"]}</p>')
         parts.append(f'<p><strong>影响：</strong>{d["effect"]}</p>')
         parts.append('</div>')
-    parts.append(f'<p><strong>特殊格局：</strong>{step3["pattern"]}</p>')
+    parts.append(f'<p><strong>特殊格局：</strong>{render_text_with_emphasis(step3["pattern"])}</p>')
     return "\n".join(parts)
 
 
@@ -709,11 +818,23 @@ def build_liu_shou_block(step5: dict) -> str:
 
 
 def build_ying_qi_block(step6: dict) -> str:
-    return "\n".join([
-        f'<p><strong>匹配法则：</strong>{step6["matched_rule"]}</p>',
-        f'<p><strong>综合窗口：</strong>{step6["window"]}</p>',
-        f'<p><strong>依据：</strong>{step6["detail"]}</p>',
-    ])
+    parts = [
+        f'<p><strong>匹配法则：</strong>{render_text_with_emphasis(step6["matched_rule"])}</p>',
+        f'<p><strong>综合窗口：</strong>{render_text_with_emphasis(step6["window"])}</p>',
+        f'<p><strong>依据：</strong>{render_text_with_emphasis(step6["detail"])}</p>',
+    ]
+    layers = step6.get("layers")
+    if isinstance(layers, dict):
+        main = normalize_layer_text(layers.get("main"))
+        auxiliary = normalize_layer_text(layers.get("auxiliary"))
+        risk = normalize_layer_text(layers.get("risk"))
+        if main or auxiliary or risk:
+            parts.append('<div class="step-full yingqi-layers">')
+            parts.append(f'<p><strong>主应期：</strong>{render_text_with_emphasis(main)}</p>')
+            parts.append(f'<p><strong>辅助节点：</strong>{render_text_with_emphasis(auxiliary)}</p>')
+            parts.append(f'<p><strong>风险窗口：</strong>{render_text_with_emphasis(risk)}</p>')
+            parts.append('</div>')
+    return "\n".join(parts)
 
 
 def build_final_block(step7: dict) -> str:
@@ -760,7 +881,7 @@ def build_md_full_block(md_full: dict) -> str:
         sections.append(
             '<div class="md-full-section">'
             f'<h3>{name}</h3>'
-            f'<div class="step-full">{content}</div>'
+            f'<div class="step-full">{render_text_with_emphasis(content)}</div>'
             '</div>'
         )
     if not sections:
@@ -789,7 +910,7 @@ def generate(data: dict, output_path: str) -> str:
     # 日空/月空分开展示（v1.8.2：支持独立字段与旧合并字符串两种格式）
     day_kong, yue_kong = split_kong_wang(meta)
 
-    # 套餐徽章（v1.8.3：由 meta.edition 传入，SKILL.md 组装时填写「高级版」/「免费基础版」）
+    # 套餐徽章（frv：由 meta.edition 传入，SKILL.md 组装时固定填写「免费基础版」）
     edition = str(meta.get("edition", "")).strip()
     if edition:
         edition_badge = f"六爻解卦 · {edition}"
@@ -824,9 +945,10 @@ def generate(data: dict, output_path: str) -> str:
 
     gua_panels_html = build_gua_panels(ben_lines, yao, meta.get("bian_gua") or "静卦", meta.get("ben_gua", ""))
 
-    # 自动检测特殊格局
+    # 自动检测特殊格局；展示层优先使用 step3.pattern 的人工深断文本，
+    # 自动摘要只作为缺失深断时的兜底提示。
     patterns = detect_patterns(ben_lines, yao, meta)
-    patterns_html = build_patterns_section(patterns)
+    patterns_html = build_patterns_section(patterns, s3.get("pattern", ""))
 
     # 神煞渲染
     shensha_html = build_shensha_section(meta, yao)
@@ -885,6 +1007,12 @@ def validate_json(data):
         if k not in data:
             errors.append(f"缺少顶层字段: {k}")
 
+    meta = data.get("meta", {}) if isinstance(data.get("meta"), dict) else {}
+    intent = str(meta.get("intent", "") or "")
+    question = str(meta.get("question", "") or "")
+    if is_pregnancy_blocked_request(question, intent):
+        errors.append(pregnancy_block_message(question, intent))
+
     # 八步齐全
     if "steps" in data:
         s = data["steps"]
@@ -925,6 +1053,61 @@ def validate_json(data):
                     f"schema 从步骤 md 文件组装完整 JSON，再跑 --validate。"
                 )
 
+        # ── 特殊格局深断校验（frv v1.8.x：防「合则牵缠/冲则变动」式浅摘要混入交付）──
+        step3_pattern = str(s.get("step3", {}).get("pattern", "") or "")
+        shallow_signatures = ("合则绊住", "合则牵缠", "冲则变动", "游魂不定", "归魂拘泥", "事有牵缠", "事多散乱")
+        deep_markers = ("角色", "用神", "世应", "应期", "合化", "冲起", "冲破", "冲开", "冲散", "所强", "参与")
+        if any(sig in step3_pattern for sig in shallow_signatures) and not any(marker in step3_pattern for marker in deep_markers):
+            errors.append(
+                "step3.pattern 疑似仅含特殊格局套话（如「合则牵缠/冲则变动」），"
+                "未完成铁律11深断。请补齐来源、类型、参与者、角色归属、合冲/成局产物、"
+                "力量状态、对用神、对世应、应期、结果断语。"
+            )
+
+        # ── 应期排序校验（frv v1.8.4：结构化三层，防主应期被辅助节点淹没）──
+        step6 = s.get("step6", {}) if isinstance(s.get("step6", {}), dict) else {}
+        step6_text = "\n".join(str(step6.get(k, "") or "") for k in ("matched_rule", "window", "detail", "unit"))
+        layers = step6.get("layers")
+        layer_texts = {}
+        if isinstance(layers, dict):
+            layer_texts = {
+                "main": normalize_layer_text(layers.get("main")),
+                "auxiliary": normalize_layer_text(layers.get("auxiliary")),
+                "risk": normalize_layer_text(layers.get("risk")),
+            }
+        if step6_text and not isinstance(layers, dict):
+            errors.append(
+                "step6 缺少结构化 layers 字段（main/auxiliary/risk）。"
+                "请将主应期、辅助节点、风险窗口分层写入 step6.layers，不要只塞在 window/detail 文本里。"
+            )
+        elif step6_text:
+            missing_layer_keys = [
+                name for name, text in layer_texts.items()
+                if not text
+            ]
+            if missing_layer_keys:
+                errors.append(
+                    "step6.layers 缺少内容："
+                    + "、".join(missing_layer_keys)
+                    + "。main/auxiliary/risk 三层均须填写，无法判断时也要写明理由。"
+                )
+        scenario_intent = intent
+        if "跳槽" in question or "工作" in question or "升职" in question or "面试" in question:
+            scenario_intent = "官运"
+        requirements = SCENARIO_YINGQI_LAYER_REQUIREMENTS.get(scenario_intent, {})
+        if requirements and step6_text and isinstance(layers, dict):
+            missing_layer_roles = []
+            for layer_name, (markers, description) in requirements.items():
+                text = layer_texts.get(layer_name, "")
+                if text and not any(marker in text for marker in markers):
+                    missing_layer_roles.append(f"{layer_name}（{description}）")
+            if missing_layer_roles:
+                errors.append(
+                    f"step6 {scenario_intent} 应期 layers 未按场景角色分层交代："
+                    + "、".join(missing_layer_roles)
+                    + "。请按 yingqi-faze.md「场景应期角色分层表」区分主应期、辅助节点、风险窗口。"
+                )
+
     # ── md_full 全文保真校验（v1.8.1：防第九步组装时压缩/省略步骤 md 原文）──
     # md_full 必须存在且逐字承载步骤 md 全文；长度低于下限 = 组装时被摘要化，阻断。
     MD_FULL_MIN_LEN = {"step1": 50, "step2": 50, "step3": 50, "step4": 50,
@@ -951,10 +1134,10 @@ def validate_json(data):
             if sig in str(content):
                 errors.append(f"md_full.{step_key} 含占位文本 '{sig}'，未注入真实解卦内容。")
 
-    # ── 套餐徽章校验（v1.8.3：meta.edition 若存在必须是 高级版/免费基础版；缺失时徽章不显示）──
+    # ── 套餐徽章校验（frv：meta.edition 若存在必须是 免费基础版；缺失时徽章不显示）──
     edition = str(data.get("meta", {}).get("edition", "")).strip() if "meta" in data else ""
-    if edition and edition not in ("高级版", "免费基础版"):
-        errors.append(f"meta.edition 非法值 '{edition}'——必须为「高级版」或「免费基础版」（由 SKILL.md 组装时填写）。")
+    if edition and edition != "免费基础版":
+        errors.append(f"meta.edition 非法值 '{edition}'——本分支必须为「免费基础版」（由 SKILL.md 组装时填写）。")
 
     # ── 动变方向↔五行生克一致性校验（🚨 防方向性错误：申=金→卯=木 是金克木=本爻克变爻，不是回头克）──
     DIZHI_WUXING = {
@@ -1028,7 +1211,7 @@ def main():
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
 
-    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v1.5")
+    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v2.0.1")
     parser.add_argument("--input", "-i", required=True, help="输入 JSON 文件路径")
     parser.add_argument("--output", "-o", default="liuyao-report.html", help="输出 HTML 文件路径")
     parser.add_argument("--validate", action="store_true",
@@ -1116,7 +1299,7 @@ def main():
                     "step3": {"dong_count": sum(1 for y in yao if y["dong"]), "dong_yao": [], "chain": "", "pattern": ""},
                     "step4": {"shi": "", "ying": "", "relation": "", "yong_shi_ying": "", "xing_hai": ""},
                     "step5": {"yong_shen_shou": "", "yong_shen_shou_xiang": "", "dong_yao_shou": "", "dong_yao_shou_xiang": ""},
-                    "step6": {"matched_rule": "", "window": "", "unit": "", "detail": ""},
+                    "step6": {"matched_rule": "", "window": "", "unit": "", "detail": "", "layers": {"main": "", "auxiliary": "", "risk": ""}},
                     "step7": {"qualitative": "盘面报告", "basis": "由 paipan.py 自动排盘生成", "final_verdict": "此报告仅含排盘信息，未做解卦分析。请通过六爻解卦 Skill 九步法进行完整分析。", "trend": "", "action_advice": ""},
                     "step8": {"integrity": "", "cross_check": "", "principles": "", "final": "仅盘面，未校验"},
                 },
@@ -1137,7 +1320,7 @@ def main():
         content = f.read()
     sections = ["report-header", "info-bar", "gua-panels", "yao-table", "verdict-box",
                 "用神分析", "动变解析", "世应关系", "六神兽提点", "应期推断"]
-    # v1.9.0：高级版与免费版同显「旺相休囚死」板块（wxs-row）
+    # v1.9.0：「旺相休囚死」板块（wxs-row）
     sections.append("wxs-row")
     found = sum(1 for s in sections if s in content)
     print(f"   板块完整性: {found}/{len(sections)}")
@@ -1170,15 +1353,15 @@ def detect_patterns(ben_lines, yao_list, meta):
         
         if has_all:
             if len(dong_yao) >= 3:
-                patterns.append({"name": name, "level": "成局", "detail": f'卦中{"、".join(dz_set)}三支皆动，严格成局，力量凌驾单爻生克。', "css": "sanhui-cheng"})
+                patterns.append({"name": name, "level": "检测摘要", "detail": f'卦中{"、".join(dz_set)}三支皆动，严格成局。此处仅提示格局存在，完整断法须回看第三步：定所强六亲、成员角色、对用神/世应影响与应期。', "css": "sanhui-cheng"})
             elif kong_yao:
                 kong_dz = [y["di_zhi"] for y in kong_yao]
                 dong_info = f'，其中{len(dong_yao)}爻发动' if dong_yao else ''
-                patterns.append({"name": name, "level": "三会之势（旬空）", "detail": f'{"、".join(dz_set)}三支俱全{dong_info}，但{"、".join(kong_dz)}旬空，当下仅为三会之势。待出空填实，则成三会火局。', "css": "sanhui-shi-kong"})
+                patterns.append({"name": name, "level": "检测摘要", "detail": f'{"、".join(dz_set)}三支俱全{dong_info}，但{"、".join(kong_dz)}旬空。此处仅提示格局存在，完整断法须回看第三步：注明空亡打折、出空升级、所强六亲与对用神影响。', "css": "sanhui-shi-kong"})
             elif len(dong_yao) >= 1:
-                patterns.append({"name": name, "level": "三会之势", "detail": f'{"、".join(dz_set)}三支俱全，{len(dong_yao)}爻发动，已成三会之势，增强相关五行之力。', "css": "sanhui-shi"})
+                patterns.append({"name": name, "level": "检测摘要", "detail": f'{"、".join(dz_set)}三支俱全，{len(dong_yao)}爻发动。此处仅提示格局存在，完整断法须回看第三步：判断成局状态、所强之爻、对用神吉凶与结果。', "css": "sanhui-shi"})
             else:
-                patterns.append({"name": name, "level": "三会之势（静）", "detail": f'{"、".join(dz_set)}三支俱全，静卦伏势，增强相关五行之力。', "css": "sanhui-shi"})
+                patterns.append({"name": name, "level": "检测摘要", "detail": f'{"、".join(dz_set)}三支俱全，静卦伏势。此处仅提示格局存在，完整断法须回看第三步：判断是否仅为势、是否有日月引动及对用神影响。', "css": "sanhui-shi"})
     
     # ── 六合检测 ──
     liuhe = {"子":"丑","丑":"子","寅":"亥","亥":"寅","卯":"戌","戌":"卯","辰":"酉","酉":"辰","巳":"申","申":"巳","午":"未","未":"午"}
@@ -1189,7 +1372,7 @@ def detect_patterns(ben_lines, yao_list, meta):
                 he_pairs.append((y1, y2))
     if he_pairs:
         detail = "、".join(f'{y1["di_zhi"]}({y1["liu_qin"]})合{y2["di_zhi"]}({y2["liu_qin"]})' for y1, y2 in he_pairs)
-        patterns.append({"name": "六合", "level": "", "detail": f'卦中存在六合关系：{detail}。合则绊住，事有牵缠。', "css": "liuhe"})
+        patterns.append({"name": "六合", "level": "检测摘要", "detail": f'卦中存在六合关系：{detail}。此处仅提示格局存在，完整断法须回看第三步：逐项判断角色归属、合化五行、合住谁、释放点及对用神/世应的影响。', "css": "liuhe"})
     
     # ── 六冲检测 ──
     liuchong = {"子":"午","午":"子","丑":"未","未":"丑","寅":"申","申":"寅","卯":"酉","酉":"卯","辰":"戌","戌":"辰","巳":"亥","亥":"巳"}
@@ -1200,7 +1383,7 @@ def detect_patterns(ben_lines, yao_list, meta):
                 chong_pairs.append((y1, y2))
     if chong_pairs:
         detail = "、".join(f'{y1["di_zhi"]}({y1["liu_qin"]})冲{y2["di_zhi"]}({y2["liu_qin"]})' for y1, y2 in chong_pairs)
-        patterns.append({"name": "六冲", "level": "", "detail": f'卦中存在六冲关系：{detail}。爻爻相冲，旺相者冲而不散，休囚者逢冲易散，吉凶须参用神旺衰。', "css": "liuchong"})
+        patterns.append({"name": "六冲", "level": "检测摘要", "detail": f'卦中存在六冲关系：{detail}。此处仅提示格局存在，完整断法须回看第三步：逐项判断谁冲谁、谁旺谁弱、冲起/冲破/冲开/冲散及对用神/世应的影响。', "css": "liuchong"})
     
     # ── 本卦六冲卦检测 ──
     # 六冲卦判定：初四/二五/三上 三对爻位地支全部相冲
@@ -1215,25 +1398,38 @@ def detect_patterns(ben_lines, yao_list, meta):
     if chong_count == 3:
         sgua = get_trigram((ben_lines[3], ben_lines[4], ben_lines[5]))
         xgua = get_trigram((ben_lines[0], ben_lines[1], ben_lines[2]))
-        patterns.append({"name": "六冲卦", "level": "", "detail": f'本卦上{TRIGRAM_SYMBOL[sgua]}下{TRIGRAM_SYMBOL[xgua]}为六冲卦，事多散乱，变动频仍。', "css": "liuchong"})
+        patterns.append({"name": "六冲卦", "level": "检测摘要", "detail": f'本卦上{TRIGRAM_SYMBOL[sgua]}下{TRIGRAM_SYMBOL[xgua]}为六冲卦。此处仅提示卦体结构倾向，完整断法须回看第三步/第七步，且不得替代具体爻层生克冲合分析。', "css": "liuchong"})
     
     # ── 伏吟检测（动爻化同地支） ──
     fy_yao = [y for y in sorted_yao if y.get("dong") and y.get("bian_di_zhi") == y.get("di_zhi")]
     if fy_yao:
         detail = "、".join(f'{y["liu_qin"]}{y["di_zhi"]}化{y["di_zhi"]}' for y in fy_yao)
-        patterns.append({"name": "伏吟", "level": "", "detail": f'动爻{detail}，伏吟之象——进退维谷，呻吟不快。', "css": "fuyin"})
+        patterns.append({"name": "伏吟", "level": "检测摘要", "detail": f'动爻{detail}，伏吟之象。此处仅提示格局存在，完整断法须回看第三步：判断发生层位、角色归属、对用神/世应的影响及应期。', "css": "fuyin"})
     
     # ── 反吟检测（动变对冲冲位） ──
     fy_chong = [y for y in sorted_yao if y.get("dong") and y.get("bian_di_zhi") and liuchong.get(y.get("di_zhi","")) == y.get("bian_di_zhi")]
     if fy_chong:
         detail = "、".join(f'{y["liu_qin"]}{y["di_zhi"]}化{y["bian_di_zhi"]}' for y in fy_chong)
-        patterns.append({"name": "反吟", "level": "", "detail": f'动爻{detail}，反吟之象——事有反复，去而复返。', "css": "fanyin"})
+        patterns.append({"name": "反吟", "level": "检测摘要", "detail": f'动爻{detail}，反吟之象。此处仅提示格局存在，完整断法须回看第三步：判断发生层位、角色归属、反复来自我方/对方/流程/结局哪一层。', "css": "fanyin"})
     
     return patterns
 
 
-def build_patterns_section(patterns):
-    """构建特殊格局 HTML 板块"""
+def build_patterns_section(patterns, step3_pattern=""):
+    """构建特殊格局 HTML 板块。
+
+    frv v1.8.x 深断规则：优先展示 step3.pattern 中由解卦流程写出的深断文本。
+    自动检测摘要只用于兜底，避免报告首页用模板短句替代真正分析。
+    """
+    deep_text = str(step3_pattern or "").strip()
+    if deep_text and deep_text not in {"无", "无特殊格局", "本卦未检测到明显特殊格局。"}:
+        rendered = render_text_with_emphasis(deep_text)
+        return (
+            '<h2>特殊格局</h2>\n'
+            '<p class="md-full-intro">以下优先展示第三步写入的特殊格局深断；自动检测只负责识别，不替代解读。</p>\n'
+            f'<div class="step-full pattern-deep">{rendered}</div>'
+        )
+
     if not patterns:
         return "<p>本卦未检测到明显特殊格局。</p>"
     
@@ -1309,7 +1505,7 @@ STATE_ORDER = ["旺", "相", "休", "囚", "死"]  # 展示顺序：能量从高
 def build_wang_shuai_block(meta: dict) -> str:
     """旺相休囚死板块：按能量从高到低（旺相休囚死）展示五行之气在月令下的流转。
 
-    v1.9.0 高级版与免费版同显（frv 已同步放开门控）。
+    v1.9.0 已同步「旺相休囚死」板块。
     """
     month_branch = str(meta.get("yue_jian", "")).strip()
     month_wx = DZ_TO_WX.get(month_branch, "")

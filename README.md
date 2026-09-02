@@ -2,7 +2,7 @@
 
 > 专业六爻纳甲筮法排盘 + 解卦工具。自动摇卦排盘 → 十步法逐层分析 → 可交付的 HTML 卦象报告。
 >
-> 开源免费版 v1.8.0 · 个人免费·商业授权
+> frv v2.0.1 · 个人免费·商业授权
 
 ## 快速开始
 
@@ -89,6 +89,7 @@ HTML 报告使用内联 CSS，无需外部依赖，可直接在浏览器打开�
 │   └── lunar_data.py      # 农历数据查找表 (2026-2086)
 └── references/
     ├── jie-gua-xiang-jie.md   # 解卦执行手册（核心）
+    ├── liuqin-liushen-leixiang.md # 六亲六神兽精细类象
     ├── html-report-guide.md   # HTML 报告生成指南
     ├── dong-bian-fa-ze.md     # 动变法则
     ├── di-zhi-relations.md    # 地支关系（合冲刑害）
@@ -113,7 +114,60 @@ HTML 报告使用内联 CSS，无需外部依赖，可直接在浏览器打开�
 ## 限制
 
 - **非迷信工具**：六爻是一种传统决策辅助工具，不替代理性判断
-- **免费版与完整版差异**：本开源免费版聚焦核心解卦流程与通用场景断语；完整版（付费）额外提供寻人/阳宅等更多意图场景、神煞联合取象、太岁三层旺衰与全量类象库——详见 [完整版介绍](https://github.com/Seanding1998/liuyao)
+- **与全功能版差异**：本分支聚焦核心解卦流程与通用场景断语；全功能版额外提供孕产、寻人、阳宅等更多意图场景、神煞联合取象、太岁三层旺衰与全量类象库——详见 [全功能版介绍](https://github.com/Seanding1998/liuyao)
+
+## 维护者速览
+
+本 Skill 的核心设计是“强执行规则 + 强防错闭环”。维护时不要把规则改轻、改少、改漏、改丢；新增说明、索引和校验可以提升可读性，但不能替代原有门禁。
+
+| 修改目标 | 优先修改位置 | 必须同步检查 |
+|----------|--------------|--------------|
+| 流程门禁、强制输出、十步法 | `SKILL.md` | `references/rule-index.md`、第八步审查 prompt、第九步准入 |
+| 解卦原则与每步细则 | `references/jie-gua-xiang-jie.md` | `SKILL.md` 对应步骤、审查映射表 |
+| reference 加载路由 | `SKILL.md` 文末「参考资料加载规则」 | 步骤内执行复述、第零步路由表、第八步 D 项 |
+| HTML schema 与报告展示 | `references/html-report-guide.md`、`scripts/generate_report.py` | `generate_report.py --validate`、README 当前版本说明 |
+| 格局检测 | `scripts/paipan.py` | `scripts/test_gua_patterns.py`、铁律 11/13、相关 references |
+| 应期分层校验 | `references/yingqi-faze.md`、`scripts/generate_report.py` | `SKILL.md` 第六步、HTML guide 的 `step6.layers` schema |
+| 版本发布 | `SKILL.md` frontmatter | README、CHANGELOG、HTML guide、脚本 CLI、`scripts/check_release_consistency.py` |
+
+规则编号检索见 [references/rule-index.md](./references/rule-index.md)。`TL-*` 表示 SKILL.md 铁律，`PR-*` 表示 `jie-gua-xiang-jie.md` 的 16 条核心原则。
+
+## 发布前检查清单
+
+在 Windows PowerShell 下运行中文输出相关命令时，先设置 UTF-8，避免 GBK 控制台把脚本误判为异常：
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+python scripts\test_gua_patterns.py
+python scripts\paipan.py --help
+python scripts\generate_report.py --help
+python scripts\check_release_consistency.py
+```
+
+发布前至少确认：
+
+- [ ] `SKILL.md metadata.version` 是唯一权威版本号。
+- [ ] README 当前版本、CHANGELOG 顶部版本、HTML guide 脚本版本、`generate_report.py` 文件头和 CLI description 已同步。
+- [ ] 修改格局检测后已运行 `scripts/test_gua_patterns.py`。
+- [ ] 修改 HTML schema 后已运行 `generate_report.py --validate` 的正反例。
+- [ ] 修改加载规则后已同步文末权威表、步骤内执行复述、第八步 D 项审查标准。
+- [ ] 修改审查流程后已同步 `SKILL.md` 第八步、`jie-gua-xiang-jie.md` 第八节和 README 当前说明。
+
+## 当前版本
+
+### v2.0.x（当前）
+
+- **v2.0.1** — 维护界面与发布治理升级：保留全部硬规则强度，新增设计意图导读、铁律分组、关键铁律防错目的、规则编号索引、维护者速览、发布前检查清单和版本一致性检查脚本。
+
+### frv v1.8.x（当前）
+
+- **v1.8.4** — 结构化应期分层：第六步强制加载 `yingqi-faze.md`；新增 `step6.layers.main/auxiliary/risk`，HTML 与 `--validate` 均按三层结构检查。
+- **v1.8.3** — 应期分层能力泛化：按本分支已支持 intent 检查主应期、辅助节点、风险窗口是否覆盖关键角色，避免只围绕单一跳槽卦修补。
+- **v1.8.2** — 特殊格局重点展示与应期排序修正：HTML 特殊格局与全文附录支持 `**重点**` 加粗渲染；应期规则新增主应期、辅助节点、风险窗口三层排序。
+- **v1.8.1** — 特殊格局深断改造：六合、六冲、三合、三会、伏吟、反吟、六合卦、六冲卦、游魂、归魂统一十项深断模板；HTML 特殊格局板块优先展示第三步深断，validate 拦截浅套话。
+- **v1.8.0** — HTML 报告爻象详表下方新增「旺相休囚死」能量展示板块。
+
+> 注：早期审查机制以历史 changelog 为准；当前执行机制以 `SKILL.md` 第八步为准。
 
 ## 许可
 
