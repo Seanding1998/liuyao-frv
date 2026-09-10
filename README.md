@@ -96,6 +96,10 @@ Agent 会确认意图，然后自动**三币摇卦 → 排四柱 → 十步解�
 | 8 | 断后校验 | 交叉验证 + 16 条原则逐条检查 |
 | 9 | 生成 HTML 报告 | 可交付的网页版卦象报告 |
 
+![十步法执行流程](docs/figures/flowchart-ten-steps.png)
+
+> 📐 流程图源文件：[`docs/figures/flowchart-ten-steps.mmd`](docs/figures/flowchart-ten-steps.mmd)（Mermaid 源）。
+
 HTML 报告使用内联 CSS，无需外部依赖。报告内含 **「旺相休囚死」** 板块（v1.8.0）：按能量从高到低展示五行之气在当前月令下的流转（如申月 → 金旺 水相 土休 火囚 木死）。
 
 ## 🧩 项目结构
@@ -123,6 +127,10 @@ HTML 报告使用内联 CSS，无需外部依赖。报告内含 **「旺相休�
     ├── fushi-riyue-guashen.md   # 伏神日月卦身
     └── yingqi-faze.md           # 应期法则
 ```
+
+![仓库分支结构：main / frv 及发布流向](docs/figures/architecture-main-frv.png)
+
+> 📐 结构图源文件：[`docs/figures/architecture-main-frv.mmd`](docs/figures/architecture-main-frv.mmd)（Mermaid 源）。本仓库（frv 免费版）由全功能版 main 同构裁剪而来，二者共享同一套十步法流程与排盘引擎，差异仅在功能裁剪。
 
 ## 🎨 特色
 

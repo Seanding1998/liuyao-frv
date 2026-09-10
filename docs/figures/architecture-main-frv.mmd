@@ -1,0 +1,35 @@
+flowchart TB
+    ROOT(["<b>liuyao-divination</b><br/>六爻纳甲筮法 Skill 仓库"]):::root
+
+    ROOT --> MAIN
+    ROOT --> FRV
+    MAIN -. "<b>同构镜像提交</b><br/>（cherry-pick / 手工对照，<b>非 merge</b>）" .-> FRV
+
+    subgraph MAIN["main ｜ 高级（全功能）版 ｜ v2.0.2"]
+        direction TB
+        M1["SKILL.md<br/>十步法执行规程 · 铁律 1~17"]
+        M2["scripts/paipan.py<br/>排盘引擎（含立币作废）"]
+        M3["scripts/generate_report.py<br/>HTML 报告生成"]
+        M4["references/ ×18<br/>类象与规则库"]
+        M6["intent ×13<br/>含 寻人 / 阳宅"]
+        M5["BRANCH-POLICY.md<br/>分支策略"]
+    end
+
+    subgraph FRV["frv ｜ 免费开源版 ｜ v2.0.2"]
+        direction TB
+        F1["SKILL.md<br/>十步法执行规程 · 铁律 1~17"]
+        F2["scripts/paipan.py<br/>排盘引擎（含立币作废）"]
+        F3["scripts/generate_report.py<br/>HTML 报告生成"]
+        F4["references/ ×16<br/>类象与规则库"]
+        F6["intent ×10<br/>无 寻人 / 阳宅"]
+        F5["孕产拦截门禁<br/>退出码 2"]
+        F7["docs/ 收款码图片"]
+    end
+
+    MAIN --> PUBM["发布 · origin/main<br/>github.com/Seanding1998/liuyao<br/>（私有）"]:::pub
+    FRV --> PUBF["发布 · origin/frv ＋ frv:main<br/>github.com/Seanding1998/liuyao-frv<br/>（公开镜像）"]:::pub
+
+    classDef root fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95,font-weight:bold
+    classDef pub fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+    style MAIN fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    style FRV fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d

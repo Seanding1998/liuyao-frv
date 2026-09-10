@@ -1,0 +1,24 @@
+flowchart TB
+    S0["<b>第零步 · 自动排盘</b><br/>提问 → 分析 intent → 三币摇卦 → 四柱排盘 → JSON 卦象"]
+    S0A["<b>第零步附 · intent 路由预读</b><br/>按 intent 加载对应 references（铁律 14/15）"]
+    S1["<b>第一步 · 审题取用神</b>"]
+    S2["<b>第二步 · 判定用神旺衰</b><br/>月建 / 日辰生克"]
+    S3["<b>第三步 · 追踪动变路径</b><br/>动爻 · 特殊格局检测"]
+    S35["<b>第 3.5 步 · 伏神与飞神</b><br/>（用神不现时触发）"]
+    S4["<b>第四步 · 分析世应关系</b>"]
+    S5["<b>第五步 · 六神兽取象</b>"]
+    S6["<b>第六步 · 应期推断</b><br/>主应期 / 辅助节点 / 风险窗口"]
+    S7["<b>第七步 · 综合断语输出</b>"]
+    S8["<b>第八步 · 智能体审查</b><br/>独立 subagent 断后校验"]
+    S9["<b>第九步 · 生成 HTML 报告</b>"]
+
+    S0 --> S0A --> S1 --> S2 --> S3 --> S35 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9
+
+    S0 -.-> ENG["<b>scripts/paipan.py</b><br/>摇卦 → 立币作废 → 四柱 → 定卦 / 世应 / 六神 / 六亲 / 伏神 → patterns"]
+    S1 -.-> REF["<b>references/ 类象与规则库</b><br/>64卦 · 五行生克 · 地支关系 · 六亲六神 · 应期法则 · 特殊格局"]
+    S9 -.-> REP["<b>scripts/generate_report.py</b><br/>组装 → HTML 可交付报告"]
+
+    classDef step fill:#e0f2fe,stroke:#0284c7,stroke-width:1.5px,color:#0c4a6e
+    classDef side fill:#fef9c3,stroke:#ca8a04,stroke-width:1.5px,color:#713f12
+    class S0,S0A,S1,S2,S3,S35,S4,S5,S6,S7,S8,S9 step
+    class ENG,REF,REP side
