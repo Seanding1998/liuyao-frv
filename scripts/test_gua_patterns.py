@@ -20,6 +20,7 @@
 
 import sys
 import os
+import random
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paipan import (
@@ -30,6 +31,10 @@ from paipan import (
     DIZHI_LIUCHONG_PAIRS,
     DIZHI_SANHUI_GROUPS,
     DIZHI_SANHE_GROUPS,
+    LiuYaoPaipan,
+    CoinEdgeError,
+    DEFAULT_EDGE_PROB,
+    make_time_rng,
 )
 
 
@@ -897,6 +902,94 @@ def test_you_gui_hun_rule_consistency(failures):
     print(f"  8 游魂 + 8 归魂 × (宫名 + 世应 + 数量) 校验，共 {case_count} 卦扫描")
 
 
+def test_coin_edge_void(failures):
+    """立币作废机制：同源同抽三态判定、退出信号、概率常量、可复现性。"""
+    print("=== 测试 10：立币作废（CoinEdgeError 同源同抽三态）===")
+
+    # 1. edge_prob=0 → 关闭立币，恒成卦且返回 6 位合法编码
+    try:
+        ygua = LiuYaoPaipan.generate_ygua(edge_prob=0.0, toss_rng=random.Random(1))
+    except CoinEdgeError:
+        failures.append("  ✗ edge_prob=0 时不应触发立币作废")
+        ygua = None
+    if ygua is not None:
+        if len(ygua) != 6 or not all(c in "1234" for c in ygua):
+            failures.append(f"  ✗ 正常成卦应返回 6 位 1-4 编码，实际：{ygua!r}")
+
+    # 2. edge_prob=1.0 → 必抛 CoinEdgeError，且应在第 1 爻第 1 枚即中断
+    try:
+        LiuYaoPaipan.generate_ygua(edge_prob=1.0, toss_rng=random.Random(0))
+        failures.append("  ✗ edge_prob=1.0 时应抛 CoinEdgeError，但未抛")
+    except CoinEdgeError as e:
+        if not (1 <= e.yao_pos <= 6):
+            failures.append(f"  ✗ 立币爻位越界：{e.yao_pos}")
+        if not (1 <= e.coin_index <= 3):
+            failures.append(f"  ✗ 立币硬币序号越界：{e.coin_index}")
+        if e.yao_pos != 1 or e.coin_index != 1:
+            failures.append(
+                f"  ✗ edge_prob=1.0 应在第1爻第1枚即中断，实际："
+                f"爻{e.yao_pos} 枚{e.coin_index}"
+            )
+
+    # 3. 默认概率常量正确
+    if abs(DEFAULT_EDGE_PROB - 1.0 / 6000.0) > 1e-12:
+        failures.append(f"  ✗ DEFAULT_EDGE_PROB 应为 1/6000，实际：{DEFAULT_EDGE_PROB}")
+
+    # 4. 同一随机源种子 → 立币结果可复现（立币与正反同源同抽）
+    def void_of(seed):
+        try:
+            LiuYaoPaipan.generate_ygua(edge_prob=0.1, toss_rng=random.Random(seed))
+            return None
+        except CoinEdgeError as e:
+            return (e.yao_pos, e.coin_index)
+
+    if void_of(12345) != void_of(12345):
+        failures.append("  ✗ 同一随机源种子下立币结果不一致")
+
+    # 5. 同源同抽：立币关闭与开启共用同一份抽签，非立币爻象应保持一致
+    #    （slots 只从最小若干格切走，其余格 v%2 与旧版逐位相同）
+    a = LiuYaoPaipan.generate_ygua(edge_prob=0.0, toss_rng=random.Random(42))
+    try:
+        b = LiuYaoPaipan.generate_ygua(
+            edge_prob=DEFAULT_EDGE_PROB, toss_rng=random.Random(42)
+        )
+        if a != b:
+            failures.append(f"  ✗ 开启立币改变了非立币爻象：{a} vs {b}")
+    except CoinEdgeError:
+        pass  # 该种子恰好命中立币格，属正常作废
+
+    # 6. 立币概率口径：0..9999 网格就近取整，默认约 2/10000
+    slots = max(1, round(DEFAULT_EDGE_PROB * 10000))
+    if slots != 2:
+        failures.append(f"  ✗ 默认立币格数应为 2，实际：{slots}")
+
+    print("  6 项断言（关闭/满概率/常量/可复现/同源同抽/概率口径）已执行")
+
+
+def test_time_rng(failures):
+    """时间随机源：独立性与分布健全性。"""
+    print("=== 测试 11：时间随机源（make_time_rng 独立性/分布）===")
+
+    samples = [make_time_rng().randint(0, 9999) for _ in range(500)]
+    unique_ratio = len(set(samples)) / len(samples)
+    if unique_ratio < 0.9:
+        failures.append(f"  ✗ 时间随机源独立性可疑：500 次首抽唯一率仅 {unique_ratio:.2f}")
+    else:
+        print(f"  独立性：500 次首抽唯一率 {unique_ratio:.2f}")
+
+    rng = make_time_rng()
+    ones = sum(rng.randint(0, 9999) % 2 for _ in range(20000))
+    ratio = ones / 20000
+    if not (0.47 <= ratio <= 0.53):
+        failures.append(f"  ✗ 时间随机源两态分布偏离：阳比例 {ratio:.3f}")
+    else:
+        print(f"  分布：20000 次阳比例 {ratio:.4f}")
+
+    ygua = LiuYaoPaipan.generate_ygua(edge_prob=0, toss_rng=make_time_rng())
+    if len(ygua) != 6 or not all(c in "1234" for c in ygua):
+        failures.append(f"  ✗ 时间随机摇卦返回非法编码：{ygua!r}")
+
+
 def main():
     failures = []
 
@@ -911,6 +1004,8 @@ def main():
     test_dufa_dujing(failures)
     test_build_paipan_attr_integration(failures)
     test_you_gui_hun_rule_consistency(failures)
+    test_coin_edge_void(failures)
+    test_time_rng(failures)
 
     if failures:
         print(f"\n❌ 失败 {len(failures)} 项:")
@@ -918,7 +1013,7 @@ def main():
             print(f)
         sys.exit(1)
     else:
-        print(f"\n✅ 全部 11 类测试通过。")
+        print(f"\n✅ 全部 13 类测试通过。")
         sys.exit(0)
 
 

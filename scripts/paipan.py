@@ -5,30 +5,41 @@
 
 功能：
   - 三币摇卦法随机生成六爻（从初爻到上爻）
+  - 摇卦随机源：默认采用时间随机（纳秒时钟 × 操作系统物理熵，锁死在起卦此刻）；
+    指定 --seed 时改用可复现的伪随机（用于"重看同一卦"）
+  - 逐枚立币三态：每枚硬币落地那一刻，由同一次抽取当场定为「正/反/立」，
+    单枚立起约 1/6000；任意一枚立起 → 整卦作废（退出码 3，不产出卦象）
   - 双轨干支计算：sxtwl（优先，精确到节气）→ 纯 Python（回退，内嵌 2026-2086 年数据）
   - 定主卦/变卦/世应/六神兽/六亲/伏神
   - 输出结构化 JSON，匹配六爻解卦 Skill 的输入格式
 
 用法：
-  python paipan.py --subject "所问之事" [--intent "意图类别"] [--year YYYY --month MM --day DD --hour HH --minute MM] [--yao "111111"]
+  python paipan.py --subject "所问之事" [--intent "意图类别"] [--year YYYY --month MM --day DD --hour HH --minute MM] [--yao "111111"] [--edge-prob P] [--seed N]
 
-  --subject  所占之事（必填）
-  --intent   意图类别：求财|官运|学业|感情|健康|出行|失物|词讼|天气|通用（默认通用）
-  --yao      手动六爻编码（6位 1-4 字符串，自下而上），不提供则随机生成
-  --year     公历年（默认当前）
-  --month    公历月
-  --day      公历日
-  --hour     小时 0-23
-  --minute   分钟
+  --subject     所占之事（必填）
+  --intent      意图类别：求财|官运|学业|感情|健康|出行|失物|词讼|天气|通用（默认通用）
+  --yao         手动六爻编码（6位 1-4 字符串，自下而上），不提供则随机生成
+  --seed        随机数种子（指定后摇卦可复现，用于重看同一卦；不指定则时间随机）
+  --year        公历年（默认当前）
+  --month       公历月
+  --day         公历日
+  --hour        小时 0-23
+  --minute      分钟
+  --edge-prob   单枚硬币立起概率（默认 1/6000；设 0 可关闭立币校验）
+
+退出码：
+  0 = 成功；1 = 参数/计算错误；2 = 孕产拦截（frv 免费版合规门禁）；3 = 立币作废（本轮起卦无效，应隔日再占）
 
 依赖：sxtwl（可选，`pip install sxtwl`；未安装时自动回退到纯 Python 计算）
 """
 
+import os
 import sys
 import json
+import time
 import random
 import argparse
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 # ── 检测 sxtwl（可选依赖）────────────────────────────────────
 _SXTWL_AVAILABLE = False
@@ -37,6 +48,64 @@ try:
     _SXTWL_AVAILABLE = True
 except ImportError:
     pass
+
+# ═══════════════════════════════════════════════════════════════
+#  立币作废
+# ═══════════════════════════════════════════════════════════════
+#
+# 设计意图（维护者须知）：
+#   立币不是"在正反之外另掷一次骰子"，而是每枚硬币落地那一刻的固有结局——
+#   正 / 反 / 立 三态由**同一次抽取**当场定出，共享同一份随机源（toss_rng）。
+#   因此：
+#     1. 立币锁在同一份天时（make_time_rng 的时间随机）或同一种子（--seed）之下，
+#        与"以天时定卦"的起卦观一致；
+#     2. 不再需要独立的 edge_rng——过去那版"正面用一条流、立币另用一条流"的
+#        做法在物理上不成立（现实中正反与立是同一过程里互斥的结局），已废弃；
+#     3. edge_prob=0 时 slots=0，抽取序列与 v2.0.1 完全一致，故关闭立币时
+#        历史 --seed 卦象仍逐位可复现；开启立币时非立币爻象亦共用同一份抽取。
+# ═══════════════════════════════════════════════════════════════
+
+# 单枚硬币立起（落在边缘竖直站立）的概率。
+# 依据：Hernández-Navarro & Piñero, Phys. Rev. E 105, L022201 (2022) 的精确解，
+# 常见硬币厚径比 0.07~0.09 对应约 1/3800 ~ 1/8100，综合取 1/6000
+# （亦为 Murray & Teare 1993 对美国镍币的经典外推值）。
+# 注：掷币随机源为 0..9999 的整数网格，立币格数按此值就近取整
+# （1/6000 → 2 格，实际约 1/5000，与文献区间同量级）。
+DEFAULT_EDGE_PROB = 1.0 / 6000.0
+
+
+class CoinEdgeError(Exception):
+    """三币摇卦中某枚硬币竖直站立（立币）→ 本轮起卦作废。
+
+    携带作废细节：爻位（1-6，自下而上）、硬币序号（1-3）、当次判定概率。
+    """
+
+    def __init__(self, yao_pos, coin_index, edge_prob):
+        self.yao_pos = yao_pos
+        self.coin_index = coin_index
+        self.edge_prob = edge_prob
+        super().__init__(
+            f"第{yao_pos}爻（自下而上）第{coin_index}枚硬币竖直站立（立币），起卦作废"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  摇卦随机源
+# ═══════════════════════════════════════════════════════════════
+
+def make_time_rng():
+    """时间随机源：以纳秒时钟混合操作系统物理熵播种。
+
+    摇卦结果应锁死在**起卦那一刻**：用 time.time_ns()（纳秒分辨率）
+    异或 os.urandom(8)（操作系统从硬件时序/中断等采集的物理熵）作为种子，
+    再驱动一个独立 RNG。既非可预测的固定序列，也不像裸取时钟低位那样
+    受时钟粒度影响产生规律。
+
+    返回 random.Random；每次调用都得到互相独立、不可复现的实例。
+    """
+    seed_int = time.time_ns() ^ int.from_bytes(os.urandom(8), "big")
+    return random.Random(seed_int)
+
 
 # ═══════════════════════════════════════════════════════════════
 #  基础常量
@@ -1050,15 +1119,33 @@ class LiuYaoPaipan:
     # ── 起卦 ────────────────────────────────────────────
 
     @staticmethod
-    def toss_coins():
-        """三币摇卦：同时掷 3 枚铜钱，观察正反组合定爻象。
-        每枚：生成随机 int → 对 2 取余 → 奇数=阳(花), 偶数=阴(字)。
+    def toss_coins(rng=None, edge_prob=0.0, yao_pos=None):
+        """三币摇卦：同时掷 3 枚铜钱，逐枚落定为「正 / 反 / 立」三态之一。
+
+        每枚硬币只抽一个随机数，该枚的最终结局由这一次抽取当场定下：
+        落在最小若干格 → 竖直站立（概率约 edge_prob）；否则取奇偶定阴阳。
+        立币与正反**同源同抽**，是硬币落地那一刻的固有分歧，而非事后附加判定；
+        这也使立币锁在同一份天时（时间随机）或同一种子（--seed）之下。
+
+        摇卦随机源 rng 未指定时回退到模块级 random（兼容旧调用与测试）。
+        某枚立起即抛 CoinEdgeError（携带 yao_pos）→ 本轮整卦作废。
+        edge_prob<=0 时 slots=0，抽取序列与 v2.0.1 完全一致（向后兼容）。
+
         两字一花 → 少阳(1)；两花一字 → 少阴(2)
         全字(全阴) → 老阴(4)；全花(全阳) → 老阳(3)
         """
-        # 三枚铜钱同时抛出，每枚：randint → %2 → 判奇偶
-        coins = [random.randint(0, 9999) % 2 for _ in range(3)]
-        # 0=偶数→阴(字), 1=奇数→阳(花)
+        if rng is None:
+            rng = random
+        # 立币格数：0..9999 共一万格，按 edge_prob 就近取整（>0 时至少占 1 格）
+        slots = 0
+        if edge_prob and edge_prob > 0:
+            slots = max(1, min(10000, int(round(edge_prob * 10000))))
+        coins = []
+        for i in range(3):               # 三枚铜钱同时抛出，逐枚落地
+            v = rng.randint(0, 9999)     # 该枚这一次抽取，同时决定立/正/反
+            if slots and v < slots:      # 落在最小若干格 → 立起
+                raise CoinEdgeError(yao_pos, i + 1, edge_prob)
+            coins.append(v % 2)          # 0=偶数→阴(字), 1=奇数→阳(花)
         yin = coins.count(0)    # 字面数（阴）
         yang = coins.count(1)   # 花面数（阳）
 
@@ -1072,9 +1159,27 @@ class LiuYaoPaipan:
             return "3"
 
     @staticmethod
-    def generate_ygua():
-        """自动摇出六爻（从初爻到上爻），返回 6 位编码字符串列表"""
-        return [LiuYaoPaipan.toss_coins() for _ in range(6)]
+    def generate_ygua(edge_prob=None, toss_rng=None):
+        """自动摇出六爻（从初爻到上爻），返回 6 位编码字符串列表。
+
+        循环 6 次，每次掷出该爻的 3 枚硬币；每枚硬币在落地那一刻即判定
+        正 / 反 / 立（立币概率 edge_prob）。任意一枚立起即抛 CoinEdgeError，
+        本轮整卦作废，立即中断——不再摇下一爻。
+
+        toss_rng 为摇卦随机源（时间随机或 --seed 复现源），透传给 toss_coins；
+        立币判定与正反共用这一次抽取，故无需单独的随机源。
+        edge_prob 为 None 时取 DEFAULT_EDGE_PROB；<=0 时关闭立币校验
+        （兼容手动/测试与旧版复现）。
+        """
+        if edge_prob is None:
+            edge_prob = DEFAULT_EDGE_PROB
+        ygua = []
+        for pos in range(6):                          # 6 次取爻，自下而上
+            yao = LiuYaoPaipan.toss_coins(            # 该次同时掷 3 枚得一条爻
+                toss_rng, edge_prob=edge_prob, yao_pos=pos + 1
+            )
+            ygua.append(yao)
+        return ygua
 
     # ── 干支计算 ────────────────────────────────────────
 
@@ -1336,6 +1441,48 @@ class LiuYaoPaipan:
 #  CLI 入口
 # ═══════════════════════════════════════════════════════════════
 
+def _emit_coin_edge_void(err, output_path=None):
+    """立币作废：打印横幅、写作废 JSON（若指定 -o），返回退出码 3。
+
+    作废时不产出 paipan_result.json，改在同目录写 paipan_void.json，
+    供 SKILL.md 第零步作废分支记录与用户隔日重占。
+    """
+    now = datetime.now()
+    next_date = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+
+    print("=" * 60, file=sys.stderr)
+    print("[COIN_EDGE_VOID] 立币作废：本轮起卦无效", file=sys.stderr)
+    print(f"  立币爻位：第 {err.yao_pos} 爻（自下而上）", file=sys.stderr)
+    print(f"  硬币序号：第 {err.coin_index} 枚（本次同时所掷 3 枚之一）", file=sys.stderr)
+    print(f"  单枚立起概率：{err.edge_prob:.8f}（约 1/{round(1 / err.edge_prob) if err.edge_prob > 0 else float('inf')}）",
+          file=sys.stderr)
+    print(f"  作废时间：{timestamp}", file=sys.stderr)
+    print(f"  建议：请于 {next_date} 0 点之后再行起卦", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+
+    if output_path:
+        void_path = output_path
+        if not void_path.lower().endswith("paipan_void.json"):
+            void_path = os.path.join(os.path.dirname(output_path) or ".",
+                                     "paipan_void.json")
+        payload = {
+            "void": True,
+            "reason": "coin_edge",
+            "yao_pos": err.yao_pos,
+            "coin_index": err.coin_index,
+            "edge_prob": err.edge_prob,
+            "timestamp": timestamp,
+            "next_available_date": next_date,
+            "message": "摇卦时出现硬币竖直站立（立币），本轮起卦作废，请隔日再占。",
+        }
+        with open(void_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print(f"📝 作废记录已写入: {void_path}", file=sys.stderr)
+
+    return 3
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="六爻自动排盘 — 三币摇卦 + 四柱 + 定卦 + 伏神",
@@ -1362,14 +1509,28 @@ def main():
     parser.add_argument("--hour", type=int, default=None)
     parser.add_argument("--minute", type=int, default=0)
     parser.add_argument("--seed", type=int, default=None,
-                        help="随机数种子（指定后摇卦结果可复现，不指定则真随机）")
+                        help="随机数种子（指定后摇卦可复现，用于重看同一卦；不指定则采用时间随机）")
+    parser.add_argument("--edge-prob", type=float, default=DEFAULT_EDGE_PROB,
+                        help="单枚硬币立起概率（默认 1/6000；设 0 关闭立币校验）")
     parser.add_argument("-o", "--output", default=None,
                         help="输出 JSON 到文件（推荐，避免终端编码问题）")
     args = parser.parse_args()
 
-    # seed 植入（仅影响自动摇卦；--yao 手动模式不受影响）
+    # 校验 --edge-prob 取值范围
+    if not (0.0 <= args.edge_prob <= 1.0):
+        print(f"错误：--edge-prob 必须在 [0, 1] 之间，当前为 {args.edge_prob}",
+              file=sys.stderr)
+        sys.exit(1)
+
+    # 摇卦随机源：
+    #   --seed 指定 → 可复现的伪随机（"重看同一卦"用）
+    #   未指定     → 时间随机（纳秒时钟 × 操作系统物理熵），锁死在起卦此刻
     if args.seed is not None and not args.yao:
-        random.seed(args.seed)
+        toss_rng = random.Random(args.seed)
+    elif not args.yao:
+        toss_rng = make_time_rng()
+    else:
+        toss_rng = None  # --yao 手动模式不摇卦
 
     if is_pregnancy_blocked_request(args.subject, args.intent):
         print(pregnancy_block_message(args.subject, args.intent), file=sys.stderr)
@@ -1415,13 +1576,20 @@ def main():
 
     # 六爻编码
     if args.yao:
+        # 手动排盘：无实体掷币，不做立币校验
         yao_str = args.yao.strip()
         if len(yao_str) != 6 or not all(c in "1234" for c in yao_str):
             print("错误：--yao 必须是 6 位 1-4 的字符串（如 121314）", file=sys.stderr)
             sys.exit(1)
         ygua = list(yao_str)
     else:
-        ygua = LiuYaoPaipan.generate_ygua()
+        # 立币与正反同源同抽：直接由 toss_rng 在掷币当下判定，无需独立随机源
+        try:
+            ygua = LiuYaoPaipan.generate_ygua(
+                edge_prob=args.edge_prob, toss_rng=toss_rng
+            )
+        except CoinEdgeError as e:
+            sys.exit(_emit_coin_edge_void(e, args.output))
 
     # 排盘
     try:

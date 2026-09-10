@@ -28,6 +28,7 @@
 | TL-14 | 路由表优先 | 数据权威 | `SKILL.md` 全局执行铁律、第零步附 | `references/yingqi-faze.md`、`references/bagua-leixiang.md`、`references/shier-dizhi-leixiang.md`、`references/liuqin-liushen-leixiang.md`、各类象 reference | 防止场景类知识到第七步才补读，前面判断已走偏 | 跨 intent 取并集；加载条件源点仍在文末表；不得指向本分支不存在的类象库 |
 | TL-15 | 每步自检门禁 | 数据权威 | `SKILL.md` 全局执行铁律、各步输出块 | `references/*`、第八步审查 D 项 | 防止纸面合规、reference 假读、只列文件名不摘关键句 | 清单必须含关键句摘录，未摘录等同步骤无效 |
 | TL-16 | 流程抗疲劳 | 运行协议 | `SKILL.md` 全局执行铁律 | `SKILL.md` 第零步附路由表 | 防止同会话第二卦以后因熟悉感跳过预读和门禁 | 不设强校验，但不得删除醒脑约束 |
+| TL-17 | 立币作废 | 运行协议 | `SKILL.md` 全局执行铁律、第零步 | `scripts/paipan.py`、`scripts/test_gua_patterns.py` | 防止忽略退出码 3、把作废卦当正常卦解，或当场重摇抹掉立币征兆 | 每枚硬币落地同源同抽定正/反/立；概率口径、退出码 3、作废话术变更需同步脚本、测试与第零步 |
 
 ## 核心原则索引
 
