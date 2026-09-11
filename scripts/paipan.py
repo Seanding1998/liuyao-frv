@@ -14,11 +14,14 @@
   - 输出结构化 JSON，匹配六爻解卦 Skill 的输入格式
 
 用法：
-  python paipan.py --subject "所问之事" [--intent "意图类别"] [--year YYYY --month MM --day DD --hour HH --minute MM] [--yao "111111"] [--edge-prob P] [--seed N]
+  python paipan.py --subject "所问之事" [--intent "意图类别"] [--year YYYY --month MM --day DD --hour HH --minute MM] [--yao "111111"] [--gua-name "火地晋"] [--dong-yao "3"] [--edge-prob P] [--seed N]
 
   --subject     所占之事（必填）
   --intent      意图类别：求财|官运|学业|感情|健康|出行|失物|词讼|天气|通用（默认通用）
   --yao         手动六爻编码（6位 1-4 字符串，自下而上），不提供则随机生成
+  --gua-name    手动排盘：只报卦名（如「火地晋」；支持八纯卦简称「乾」），自动换算编码
+  --dong-yao    手动排盘：动爻位置（如「3」或「初爻,五爻」；缺省为静卦）
+  --bian-gua    手动排盘：报变卦名，与本卦逐爻取差自动得动爻（与 --dong-yao 互斥）
   --seed        随机数种子（指定后摇卦可复现，用于重看同一卦；不指定则时间随机）
   --year        公历年（默认当前）
   --month       公历月
@@ -28,7 +31,10 @@
   --edge-prob   单枚硬币立起概率（默认 1/6000；设 0 可关闭立币校验）
 
 退出码：
-  0 = 成功；1 = 参数/计算错误；2 = 孕产拦截（frv 免费版合规门禁）；3 = 立币作废（本轮起卦无效，应隔日再占）
+  0 = 成功
+  1 = 参数/计算错误（含 --gua-name 无法识别、intent 非法、年份越界等）
+  2 = 孕产拦截（frv 免费版合规门禁；拦截发生在建目录之前，无残留文件）
+  3 = 立币作废（本轮起卦无效，应隔日再占；保留 -o 目录与作废记录）
 
 依赖：sxtwl（可选，`pip install sxtwl`；未安装时自动回退到纯 Python 计算）
 """
@@ -133,10 +139,12 @@ TIANGAN_INDEX = {tg: i + 1 for i, tg in enumerate(TIANGAN)}  # 甲=1 … 癸=10
 # 有效的 intent 类别
 VALID_INTENTS = {"求财", "官运", "学业", "感情", "健康", "出行", "失物", "词讼", "天气", "通用"}
 
+# 注意：「生产」是歧义词（亦指生产项目/生产力/投产），不作为拦截特征词；
+# 分娩类拦截一律使用无歧义的强特征词，避免误伤求财、官运等正常问卦。
 PREGNANCY_BLOCK_KEYWORDS = (
     "孕产", "怀孕", "有孕", "妊娠", "胎产", "胎儿", "胚胎", "保胎", "流产",
-    "生产", "分娩", "临盆", "坐月子", "预产期", "产检", "孕妇", "宝宝性别",
-    "胎儿性别", "生男生女",
+    "分娩", "临盆", "临产", "接生", "产妇", "生孩子", "坐月子", "预产期",
+    "产检", "孕妇", "宝宝性别", "胎儿性别", "生男生女",
 )
 PREGNANCY_GENDER_KEYWORDS = (
     "性别", "男女", "男孩", "女孩", "男宝", "女宝", "儿子", "女儿",
@@ -1105,6 +1113,91 @@ CANGYAO64 = {
 }
 
 
+# ── 卦名 → 六爻编码（「一句话手动排盘」用）──────────────
+# GUA64 的 value 结构：[初爻..上爻, 世, 应, 特殊属性, 额外, 宫位, 卦名]
+# 键即 6 位 1/2 编码（1=阳 2=阴，自下而上）。
+_GUA_NAME_TO_KEY = {arr[11]: key for key, arr in GUA64.items()}
+_PURE_GUA_ALIAS = {arr[11][0]: key for key, arr in GUA64.items() if arr[11][1] == "为"}
+_DONG_TOKEN_MAP = {
+    "初": 1, "一": 1, "1": 1,
+    "二": 2, "2": 2, "三": 3, "3": 3, "四": 4, "4": 4,
+    "五": 5, "5": 5, "六": 6, "6": 6, "上": 6,
+}
+
+
+def resolve_gua_name(name):
+    """把口语卦名解析为 GUA64 的 6 位 1/2 键（自下而上，1=阳 2=阴）。
+
+    支持：完整卦名（「泽火革」）、带宫位形式（「坎-泽火革」）、
+    八纯卦简称（「乾」→ 乾为天）、唯一后缀简称（「小过」→ 雷山小过）。
+    解析失败或有歧义时抛 ValueError。
+    """
+    if not name:
+        raise ValueError("卦名不能为空")
+    raw = str(name).strip().replace("卦", "")
+    if "-" in raw:                      # 兼容 paipan 输出的「宫-卦名」
+        raw = raw.split("-")[-1].strip()
+    if raw in _GUA_NAME_TO_KEY:
+        return _GUA_NAME_TO_KEY[raw]
+    if raw in _PURE_GUA_ALIAS:          # 八纯卦简称
+        return _PURE_GUA_ALIAS[raw]
+    matches = [key for full, key in _GUA_NAME_TO_KEY.items() if full.endswith(raw)]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        candidates = "、".join(sorted(full for full in _GUA_NAME_TO_KEY if full.endswith(raw)))
+        raise ValueError(f"卦名「{name}」有歧义，可能指：{candidates}")
+    raise ValueError(f"无法识别卦名「{name}」，请使用完整卦名（如「火地晋」）")
+
+
+def parse_dong_yao(text):
+    """解析动爻：接受「3」「初爻」「二爻、五爻」「2,5」等，返回 1-based 爻位列表。"""
+    if not text:
+        return []
+    cleaned = str(text)
+    for ch in "爻位第和与、，,;；/ \u3000":
+        cleaned = cleaned.replace(ch, ",")
+    positions = []
+    for token in (t for t in cleaned.split(",") if t):
+        if token not in _DONG_TOKEN_MAP:
+            raise ValueError(f"无法识别的动爻「{token}」，请用 1-6 或 初/二/三/四/五/六/上")
+        positions.append(_DONG_TOKEN_MAP[token])
+    if len(set(positions)) != len(positions):
+        raise ValueError("动爻位置重复")
+    return sorted(set(positions))
+
+
+def build_ygua_from_gua_name(gua_name, dong_yao=""):
+    """由卦名 + 动爻生成 6 位 1-4 编码（1=少阳 2=少阴 3=老阳 4=老阴）。
+
+    dong_yao 可为字符串（如「3」「初爻,五爻」）或 1-based 爻位整数序列。
+    """
+    positions = list(dong_yao) if isinstance(dong_yao, (list, tuple)) else parse_dong_yao(dong_yao)
+    ygua = list(resolve_gua_name(gua_name))   # '1'/'2'，静爻
+    for pos in positions:
+        idx = pos - 1
+        ygua[idx] = "3" if ygua[idx] == "1" else "4"   # 阳动→老阳，阴动→老阴
+    return ygua
+
+
+def dong_yao_from_pair(ben_gua_name, bian_gua_name):
+    """由「本卦名 + 变卦名」反推动爻位（1-based 列表）。
+
+    六爻中变卦 = 本卦按动爻逐位翻转，故两卦编码不同的位即动爻位，
+    方向（老阳/老阴）由本卦该位阴阳唯一确定——无损、无歧义。
+    本卦与变卦相同（无差异）时抛 ValueError。
+    """
+    ben = resolve_gua_name(ben_gua_name)
+    bian = resolve_gua_name(bian_gua_name)
+    positions = [i + 1 for i in range(6) if ben[i] != bian[i]]
+    if not positions:
+        raise ValueError(
+            f"本卦「{ben_gua_name}」与变卦「{bian_gua_name}」相同，无动爻；"
+            "变卦模式需两卦不同，静卦请省略 --bian-gua"
+        )
+    return positions
+
+
 # ═══════════════════════════════════════════════════════════════
 #  排盘核心逻辑
 # ═══════════════════════════════════════════════════════════════
@@ -1263,7 +1356,7 @@ class LiuYaoPaipan:
         guastr = "".join(gua)
 
         main_gua_arr = GUA64[guastr]
-        main_gua_name = f"{main_gua_arr[10].replace('宫', '')}-{main_gua_arr[11]}"
+        main_gua_name = main_gua_arr[11]
         main_gua_attr = main_gua_arr[8] if main_gua_arr[8] else ""
         # 游魂/归魂标签
         if main_gua_arr[9]:
@@ -1288,7 +1381,7 @@ class LiuYaoPaipan:
         has_dong = len(dgua_raw) > 0
         if has_dong:
             bian_gua_arr = GUA64[bguastr]
-            bian_gua_name = f"{bian_gua_arr[10].replace('宫', '')}-{bian_gua_arr[11]}"
+            bian_gua_name = bian_gua_arr[11]
             bian_gua_attr = bian_gua_arr[8] if bian_gua_arr[8] else ""
             if bian_gua_arr[9]:
                 bian_gua_attr = (bian_gua_attr + " " if bian_gua_attr else "") + bian_gua_arr[9]
@@ -1491,6 +1584,7 @@ def main():
 示例:
   python paipan.py --subject "下个月的工作运势" --intent "官运"
   python paipan.py --subject "遗失物品能否找回" --intent "失物" --yao "121314"
+  python paipan.py --subject "工作升职" --intent "官运" --gua-name "火地晋" --dong-yao "3"
   python paipan.py --subject "感情发展" --year 2026 --month 6 --day 8 --hour 14
         """,
     )
@@ -1499,6 +1593,12 @@ def main():
                         help="意图类别：求财|官运|学业|感情|健康|出行|失物|词讼|天气|通用")
     parser.add_argument("--yao", default=None,
                         help="手动六爻编码（6位1-4，自下而上；不提供则三币随机）")
+    parser.add_argument("--gua-name", default=None,
+                        help="手动排盘：只报卦名（如「火地晋」「泽火革」，支持八纯卦简称「乾」）")
+    parser.add_argument("--dong-yao", default=None,
+                        help="手动排盘：动爻位置，逗号分隔（如「3」或「初爻,五爻」；缺省为静卦）")
+    parser.add_argument("--bian-gua", default=None,
+                        help="手动排盘：报变卦名（与本卦名逐爻取差自动得动爻，如「小过」；与 --dong-yao 互斥）")
     parser.add_argument("--manual", action="store_true",
                         help="标记为手动排盘（配合 --yao 使用，在 JSON 中添加 mode: manual）")
     parser.add_argument("--from-json", default=None,
@@ -1521,6 +1621,29 @@ def main():
         print(f"错误：--edge-prob 必须在 [0, 1] 之间，当前为 {args.edge_prob}",
               file=sys.stderr)
         sys.exit(1)
+
+    # 「一句话手动排盘」：--gua-name [+ --dong-yao 或 --bian-gua] → 归一成 --yao 编码
+    if args.bian_gua and not args.gua_name:
+        print("错误：--bian-gua 必须与 --gua-name 同时使用", file=sys.stderr)
+        sys.exit(1)
+    if args.bian_gua and args.dong_yao:
+        print("错误：--bian-gua 与 --dong-yao 不能同时使用（二者都是指定动爻）", file=sys.stderr)
+        sys.exit(1)
+    if args.gua_name:
+        if args.yao:
+            print("错误：--gua-name 与 --yao 不能同时使用", file=sys.stderr)
+            sys.exit(1)
+        try:
+            if args.bian_gua:
+                positions = dong_yao_from_pair(args.gua_name, args.bian_gua)
+                ygua = build_ygua_from_gua_name(args.gua_name, positions)
+            else:
+                ygua = build_ygua_from_gua_name(args.gua_name, args.dong_yao)
+            args.yao = "".join(ygua)
+        except ValueError as e:
+            print(f"错误：{e}", file=sys.stderr)
+            sys.exit(1)
+        args.manual = True
 
     # 摇卦随机源：
     #   --seed 指定 → 可复现的伪随机（"重看同一卦"用）

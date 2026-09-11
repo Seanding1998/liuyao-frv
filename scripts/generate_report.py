@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""六爻卦象 HTML 报告生成器 v2.0.2。
+"""六爻卦象 HTML 报告生成器 v2.0.3。
 
 新增:
 - 本卦/变卦/互卦 三栏盘面展示
@@ -20,10 +20,12 @@ import re
 import sys
 from datetime import datetime
 
+# 注意：「生产」是歧义词（亦指生产项目/生产力/投产），不作为拦截特征词；
+# 分娩类拦截一律使用无歧义的强特征词，避免误伤求财、官运等正常问卦。
 PREGNANCY_BLOCK_KEYWORDS = (
     "孕产", "怀孕", "有孕", "妊娠", "胎产", "胎儿", "胚胎", "保胎", "流产",
-    "生产", "分娩", "临盆", "坐月子", "预产期", "产检", "孕妇", "宝宝性别",
-    "胎儿性别", "生男生女",
+    "分娩", "临盆", "临产", "接生", "产妇", "生孩子", "坐月子", "预产期",
+    "产检", "孕妇", "宝宝性别", "胎儿性别", "生男生女",
 )
 PREGNANCY_GENDER_KEYWORDS = (
     "性别", "男女", "男孩", "女孩", "男宝", "女宝", "儿子", "女儿",
@@ -1211,7 +1213,7 @@ def main():
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
 
-    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v2.0.2")
+    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v2.0.3")
     parser.add_argument("--input", "-i", required=True, help="输入 JSON 文件路径")
     parser.add_argument("--output", "-o", default="liuyao-report.html", help="输出 HTML 文件路径")
     parser.add_argument("--validate", action="store_true",

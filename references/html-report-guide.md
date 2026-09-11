@@ -2,7 +2,7 @@
 
 > 对应主 Skill 第九步：生成 HTML 可交付报告。第八步校验通过后执行。
 >
-> **脚本版本**：v2.0.2 — 卦象盘面（三栏本变互+错综切换）+ 日空/月空分开展示 + 解卦过程全文附录（md_full）+ 旺相休囚死（五行之气月令流转）+ 特殊格局深断优先展示 + 重点加粗渲染 + frv 结构化应期场景分层校验 + 维护界面与发布一致性检查。
+> **脚本版本**：v2.0.3 — 卦象盘面（三栏本变互+错综切换）+ 日空/月空分开展示 + 解卦过程全文附录（md_full）+ 旺相休囚死（五行之气月令流转）+ 特殊格局深断优先展示 + 重点加粗渲染 + frv 结构化应期场景分层校验 + 维护界面与发布一致性检查。
 
 ---
 
@@ -192,6 +192,29 @@
 | cross_check | string | 交叉验证结论 |
 | principles | string | 16条原则检查 |
 | final | string | 最终校验结论 |
+
+### 2.5 `paipan_result.json` → `liuyao-data.json` 字段转换（必读）
+
+> ⛔ `paipan_result.json`（第零步脚本直出，**扁平格式**）与 `liuyao-data.json`（本步 schema，**meta/yao/steps/md_full 四域**）**结构不同**，**没有**自动桥——SQL 那样的映射必须由 Agent 手工完成。直接把 `paipan_result.json` 传给 `generate_report.py` 会触发脚本的扁平格式自动适配，填入「未做解卦分析」占位文本，产出只有盘面、没有解卦内容的空报告（`--validate` 会拦截）。
+
+逐字段转换规则：
+
+| `paipan_result.json`（源） | `liuyao-data.json`（目标） | 转换动作 |
+|------|------|------|
+| `date`（对象 `{year,month,day,hour,minute}`） | `meta.date`（string） | 拼为 `"YYYY-MM-DD HH:MM"`（如 `"2026-05-21 13:54"`） |
+| `lunar`（string） | `meta.lunar` | 直取 |
+| `question` / `intent` | `meta.question` / `meta.intent` | 直取 |
+| `ben_gua` / `bian_gua`（**纯卦名**，无宫位前缀） | `meta.ben_gua` / `meta.bian_gua` | 直取；无变卦填 `null` |
+| `month_branch` | `meta.yue_jian` | 直取 |
+| `ri_chen` | `meta.ri_chen` | 直取 |
+| `kong_wang`（**list** `["午","未"]`） | `meta.kong_wang`（string，**日空**） | `"".join(...)` → `"午未"`；**只放日空** |
+| `yue_xunkong`（**list**） | `meta.yue_kong`（string，**月空**） | `"".join(...)`；**与日空分开字段，禁止合并成"日空X, 月空Y"** |
+| （固定值） | `meta.edition` | frv 固定填 `"免费基础版"` |
+| `lines[*].kong_wang`（`""`/`"日空"`/`"月空"`/`"日空月空"`） | `yao[*].special_tags`（string[]） | 含「日空」→ 加 `"日空"`；含「月空」→ 加 `"月空"`；标记为旬空但无日/月限定 → 加 `"旬空"`；无则 `[]`。月破等其它标记同样并入本数组 |
+| `lines[*]` 各字段 | `yao[*]` | `pos`/`liu_qin`/`di_zhi`/`wu_xing`/`shi_ying`/`liu_shou`/`dong` 直取；`bian_yao.{di_zhi,liu_qin}` → `bian_di_zhi`/`bian_liu_qin`；`fu_shen` 直取 |
+| `shensha` | （frv 不使用） | frv 免费版第五步无神煞取象，**无需**转换，HTML 神煞板块自动省略 |
+
+> 📌 其余 `steps.step1~step8` 与 `md_full` 全部来自 `步骤N-*.md` 的解卦输出，与排盘 JSON 无关，需按 2.4 / 2.1b 手工组装。
 
 ---
 

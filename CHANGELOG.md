@@ -10,6 +10,19 @@
 - **应期分层校验**：重点回看 v1.8.2、v1.8.3、v1.8.4；第六步必须输出主应期、辅助节点、风险窗口三层。
 - **规则编号检索**：见 `references/rule-index.md`；`TL-*` 为 SKILL.md 铁律，`PR-*` 为 `jie-gua-xiang-jie.md` 核心原则。
 
+## v2.0.3 (2026-09-11)
+
+### 审查修复与一句话手动排盘
+
+> 本版本修复外部审查发现的 8 项问题（其中 4 项 frv 专属、4 项与 main 共有），并落地 README 承诺的「一句话手动排盘」。不削弱任何解卦规则。
+
+- `scripts/paipan.py`：**移除误伤拦截词「生产」**——该词亦指生产项目/生产力/投产，会把求财、官运等正常问卦直接拦死（退出码 2）。拦截表仅保留无歧义的分娩类强特征词（分娩/临盆/临产/接生/产妇/生孩子等）。新增 `resolve_gua_name()`、`parse_dong_yao()`、`build_ygua_from_gua_name()`、`dong_yao_from_pair()` 与 CLI 参数 `--gua-name` / `--dong-yao` / `--bian-gua`：支持「卦名+动爻」或「本卦+变卦」一句话手动排盘，后者由两卦逐爻取差确定动爻，无需人工比爻；无实体掷币、不做立币判定，JSON `mode=manual`。支持八纯卦简称（「乾」）与带宫位写法（「坎-泽火革」）。**`ben_gua`/`bian_gua` 输出改为纯卦名**（去「宫-」前缀），宫位仍由 `ben_gua_gong` 保留。
+- `scripts/generate_report.py`：同步移除拦截词「生产」（此为第二份门禁表，若漏改会在第九步把「生产项目」报告再次拦掉）；版本升至 v2.0.3。
+- `SKILL.md`：内部门禁段删除「生产」并新增「禁用歧义特征词」说明；第零步新增 4b 孕产门禁前置检查（拦截发生在建目录之前，退出码 2 不再留空目录）；新增非 0 退出码统一处置表（1/2 清理空目录、3 保留作废记录、0 正常）；排盘命令块新增手动排盘三分支（`--dong-yao` / `--bian-gua` / 静卦）与 Agent 侧换算规程（换算全部交脚本，禁手算比爻）；「输入格式」补 `sanhe_ju`/`ben_gua_gong`/`shensha` 字段说明及 `ben_gua` 纯卦名口径；第零步 intent 速查表统一到 `jie-gua-xiang-jie.md` 权威口径（出行=应爻、词讼=世应、天气=官鬼/父母/妻财）；intent 路由表补「学业」「词讼」两行。
+- `references/jie-gua-xiang-jie.md`：intent→用神映射表标注为唯一权威，出行行补「问出行方式加看父母」。
+- `references/html-report-guide.md`：新增 2.5 节「`paipan_result.json` → `liuyao-data.json` 字段转换」——逐字段说明 `kong_wang`(list→string)、`date`(对象→字符串)、`kong_wang`→`special_tags`、`edition`、`shensha`（frv 不转换）等映射。
+- `README.md`：方式二说明改为「卦名 + 动爻位置（或变卦名）」，删除未落地的「动爻二爻和五爻」示例、补 `--bian-gua` 说明；步骤表第 5 步「神煞修饰」改为「六神兽对用神/动爻取象」（frv 无神煞分析，消除 README 自相矛盾）。
+
 ## v2.0.2 (2026-09-10)
 
 ### 立币作废机制（同构 main v2.0.2）
