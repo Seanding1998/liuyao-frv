@@ -195,31 +195,33 @@ def test_gua64_correctness(failures):
 
 
 # ═══════════════════════════════════════════════════════════════
-#  测试 2：三会局（sanhui_ju）— 四态 + 动爻条件 + 空亡压制 + 日月补字
+#  测试 2：三会局（sanhui_ju）— 三态 + 最高档 + 激活源口径
 # ═══════════════════════════════════════════════════════════════
 def test_sanhui_ju(failures):
-    print(f"\n=== 测试 2：三会局（sanhui_ju）— 四态状态机 ===")
+    print(f"\n=== 测试 2：三会局（sanhui_ju）— 三态状态机 + 最高档 ===")
 
     all_dz = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
 
-    # 状态机（对齐 paipan.py detect_patterns）：
-    #   严格成局：≥3动，或 2动+日月补第三字
-    #   成局：≥1动无空亡，或 全静+日月入组+无旬空
-    #   三会：≥1动+有空亡（动不空，空在它爻）→ 出空成局
-    #   三会之势：全静+日月不在组，或 全静+日月入组+有旬空（空亡压死）
+    # ⛔ 口径（用户 2026-09-19 明定，与三合同源但多一个最高档）：
+    #   激活源 = ① 任一爻发动  ② 日月入组（日辰或月建占局中一字）
+    #   严格成局：**三爻全动**（三会独有最高档；三合无此档）
+    #   成局：有激活源（≥1动 或 日月入组）——⛔ 旬空不作独立降级档
+    #   三会之势：全静且日月不入组
+    #   ⛔ 空亡仅记 kong_positions，局力打折；若全静且日月不入组而有空亡，
+    #      则该字值日/值月即等于日月入卦 → 由 void_trigger 标注激活时机
     case_count = 0
     for group in DIZHI_SANHUI_GROUPS:
         leftovers = [dz for dz in all_dz if dz not in group][:3]
-        # (动爻位列表, 期望状态, 描述, 空亡爻位)
+        # (动爻位列表, 期望状态, 描述, 空亡爻位, 日辰)
         cases = [
-            ([1, 2, 3], "严格成局", "三支都动", []),
-            ([1, 2],    "成局",     "2 动 1 静", []),
-            ([1],       "成局",     "1 动 2 静", []),
-            ([],        "三会之势", "三支全静", []),
-            ([1],       "三会",     "1 动 + 静爻空（出空成局）", [2]),
-            ([],        "三会之势", "全静 + 日月入组 + 空亡压死", [1]),
+            ([1, 2, 3], "严格成局", "三支全动（最高档）", [], ""),
+            ([1, 2],    "成局",     "2 动 1 静", [], ""),
+            ([1],       "成局",     "1 动 2 静", [], ""),
+            ([],        "三会之势", "三支全静、日月不入组", [], ""),
+            ([1],       "成局",     "1 动 + 静爻空（空不作降级）", [2], ""),
+            ([],        "成局",     "全静 + 日月入组（日辰入组即激活）", [1], None),
         ]
-        for dong_positions, expected_status, desc, kong_positions in cases:
+        for dong_positions, expected_status, desc, kong_positions, ri in cases:
             lines = [
                 make_line(1, group[0], dong=(1 in dong_positions),
                           kong_wang=(1 in kong_positions)),
@@ -231,16 +233,13 @@ def test_sanhui_ju(failures):
                 make_line(5, leftovers[1]),
                 make_line(6, leftovers[2]),
             ]
-            # 全静 + 日月入组 + 空亡压死：用日辰=group[0] 激活日月入组
-            if desc == "全静 + 日月入组 + 空亡压死":
+            if ri is None:
                 result = detect_patterns(lines, "", "", ri_chen=group[0])
             else:
                 result = detect_patterns(lines, "", "")
             matched = [s for s in result["sanhui_ju"] if s["group"] == "".join(group)]
             if not matched:
-                failures.append(
-                    f"  ✗ 三会局 {group}（{desc}）未被检测到"
-                )
+                failures.append(f"  ✗ 三会局 {group}（{desc}）未被检测到")
             elif matched[0]["status"] != expected_status:
                 failures.append(
                     f"  ✗ 三会局 {group}（{desc}）状态错误：期望 {expected_status}，"
@@ -248,46 +247,46 @@ def test_sanhui_ju(failures):
                 )
             case_count += 1
 
-    # 日月补字：3 支俱全 + 2 动 + 日月补第三字 → 严格成局
-    # 寅卯辰：1爻寅动、2爻卯动、3爻辰静；日辰=辰
-    lines_sm = [
-        make_line(1, "寅", dong=True),
-        make_line(2, "卯", dong=True),
-        make_line(3, "辰", dong=False),
-        make_line(4, "午"),
-        make_line(5, "申"),
-        make_line(6, "戌"),
-    ]
-    result = detect_patterns(lines_sm, "", "", month_branch="", ri_chen="辰")
-    matched = [s for s in result["sanhui_ju"] if s["group"] == "寅卯辰"]
-    if not matched:
-        failures.append("  ✗ 日月补字三会局（寅卯辰 + 日辰辰）未检测到")
-    elif matched[0]["status"] != "严格成局":
-        failures.append(
-            f"  ✗ 日月补字三会局状态错误：期望 严格成局，实际 {matched[0]['status']}"
-        )
-    case_count += 1
-
-    # 全静 + 日月入组 + 无旬空 → 成局（日月之力=动爻）
-    lines_sm2 = [
-        make_line(1, "巳"),
+    # 空亡激活时机：全静 + 日月不入组 + 一字空亡 → 三会之势，但须标出「值日/值月即成局」
+    lines_kong = [
+        make_line(1, "巳", kong_wang=True),
         make_line(2, "午"),
         make_line(3, "未"),
         make_line(4, "寅"),
         make_line(5, "卯"),
         make_line(6, "申"),
     ]
-    result = detect_patterns(lines_sm2, "", "", month_branch="", ri_chen="午")
+    result = detect_patterns(lines_kong, "", "", month_branch="", ri_chen="")
     matched = [s for s in result["sanhui_ju"] if s["group"] == "巳午未"]
     if not matched:
-        failures.append("  ✗ 全静+日月入组三会局（巳午未 + 日辰午）未检测到")
-    elif matched[0]["status"] != "成局":
+        failures.append("  ✗ 三会局 巳午未（全静+空亡）未检测到")
+    else:
+        st = matched[0]["status"]
+        if st != "三会之势":
+            failures.append(f"  ✗ 三会局 巳午未（全静+空亡）期望 三会之势，实际 {st}")
+        if not matched[0].get("void_trigger"):
+            failures.append("  ✗ 三会局 巳午未（全静+空亡）未标注空亡激活时机")
+    case_count += 1
+
+    # 三爻全动 → 严格成局（最高档）须区别于 2 动
+    lines_top = [
+        make_line(1, "寅", dong=True),
+        make_line(2, "卯", dong=True),
+        make_line(3, "辰", dong=True),
+        make_line(4, "午"),
+        make_line(5, "申"),
+        make_line(6, "戌"),
+    ]
+    result = detect_patterns(lines_top, "", "")
+    matched = [s for s in result["sanhui_ju"] if s["group"] == "寅卯辰"]
+    if not matched or matched[0]["status"] != "严格成局":
         failures.append(
-            f"  ✗ 全静+日月入组三会局状态错误：期望 成局，实际 {matched[0]['status']}"
+            f"  ✗ 三会局最高档（三爻全动）判定错误："
+            f"{matched[0]['status'] if matched else '未检测到'}"
         )
     case_count += 1
 
-    # 反例：缺一支不应记录
+    # 反例：缺一支不应记录（缺一字不作会，不论半会）
     lines_partial = [
         make_line(1, "亥"),
         make_line(2, "子"),
@@ -303,18 +302,25 @@ def test_sanhui_ju(failures):
         )
     case_count += 1
 
-    print(f"  4 组 × 6 种动爻/空亡组合 + 日月补字 + 全静日月入组 + 缺支反例，"
+    print(f"  4 组 × 6 种动爻/空亡/日月组合 + 最高档 + 空亡激活时机 + 缺支反例，"
           f"共 {case_count} 用例")
 
 
 # ═══════════════════════════════════════════════════════════════
-#  测试 2B：三合局（sanhe_ju）— 3 档 + 半合子型 + 日月补字
+#  测试 2B：三合局（sanhe_ju）— 3 档 + 半合子型 + 激活源口径
 # ═══════════════════════════════════════════════════════════════
 def test_sanhe_ju(failures):
-    print(f"\n=== 测试 2B：三合局（sanhe_ju）— 3 档 + 半合子型 ===")
+    print(f"\n=== 测试 2B：三合局（sanhe_ju）— 3 档 + 半合子型 + 无最高档 ===")
 
     all_dz = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
     case_count = 0
+
+    # ⛔ 口径（用户 2026-09-19 明定，与三会同源但**无最高档**）：
+    #   激活源 = ① 任一爻发动  ② 日月入组
+    #   全静 + 日月不入组 → 虚合（不论几字现）；日月来一个 → 成局
+    #   日月不入组 + ≥1动 → 成局
+    #   三爻全动 → **仍是成局**（⛔ 三合无「严格成局」档，此三会独有）
+    #   空亡仅记 kong_positions；全静+日月不入组+有空亡 → 该字值日/值月即激活
 
     # 正例 A：3 字全现 + 1 字动 → 成局（每组）
     for g0, g1, g2, wx in DIZHI_SANHE_GROUPS:
@@ -338,7 +344,27 @@ def test_sanhe_ju(failures):
             )
         case_count += 1
 
-    # 正例 B：3 字全现 + 0 字动 → 虚合
+    # 正例 A2：3 字全现 + **3 字全动** → 仍是「成局」，⛔ 不得为「严格成局」
+    lines_all_dong = [
+        make_line(1, "申", dong=True),
+        make_line(2, "子", dong=True),
+        make_line(3, "辰", dong=True),
+        make_line(4, "寅"),
+        make_line(5, "卯"),
+        make_line(6, "巳"),
+    ]
+    result = detect_patterns(lines_all_dong, "", "")
+    matched = [s for s in result["sanhe_ju"] if s["group"] == "申子辰"]
+    if not matched:
+        failures.append("  ✗ 三合局 申子辰（三字全动）未检测到")
+    elif matched[0]["status"] != "成局":
+        failures.append(
+            f"  ✗ 三合局无最高档规则违背：三字全动应为「成局」，"
+            f"实际 {matched[0]['status']}（「严格成局」为三会独有）"
+        )
+    case_count += 1
+
+    # 正例 B：3 字全现 + 0 字动 + 日月不入组 → 虚合
     lines_xuhe = [
         make_line(1, "申"),
         make_line(2, "子"),
@@ -357,7 +383,7 @@ def test_sanhe_ju(failures):
         )
     case_count += 1
 
-    # 正例 C：3 字全现 + 0 字动 + 日月占其中一字 → 成局（日月引动合局）
+    # 正例 C：3 字全现 + 0 字动 + 日月占其中一字 → 成局（规则 a：全静须日月来一个）
     lines_sm = [
         make_line(1, "申"),
         make_line(2, "子"),
@@ -372,9 +398,52 @@ def test_sanhe_ju(failures):
         failures.append("  ✗ 三合局 申子辰（全静+月建申）未检测到")
     elif matched[0]["status"] != "成局":
         failures.append(
-            f"  ✗ 三合局 申子辰（全静+月建申）状态错误：期望 成局（日月引动），"
+            f"  ✗ 三合局 申子辰（全静+月建申）状态错误：期望 成局（日月入组），"
             f"实际 {matched[0]['status']}"
         )
+    case_count += 1
+
+    # 规则 b：日月都不入组 + 有一爻发动 → 成局（已由正例 A 覆盖，此处增补静多动少）
+    lines_one_dong = [
+        make_line(1, "申"),
+        make_line(2, "子", dong=True),
+        make_line(3, "辰"),
+        make_line(4, "寅"),
+        make_line(5, "卯"),
+        make_line(6, "巳"),
+    ]
+    result = detect_patterns(lines_one_dong, "", "", month_branch="酉", ri_chen="丑")
+    matched = [s for s in result["sanhe_ju"] if s["group"] == "申子辰"]
+    if not matched or matched[0]["status"] != "成局":
+        failures.append(
+            f"  ✗ 三合局规则b（日月不入组+1动）判定错误："
+            f"{matched[0]['status'] if matched else '未检测到'}"
+        )
+    case_count += 1
+
+    # 规则 c：全静 + 日月不入组 + 一字空亡 → 虚合，但须标出「该字值日/值月即激活」
+    lines_kong = [
+        make_line(1, "申"),
+        make_line(2, "子", kong_wang=True),
+        make_line(3, "辰"),
+        make_line(4, "寅"),
+        make_line(5, "卯"),
+        make_line(6, "巳"),
+    ]
+    result = detect_patterns(lines_kong, "", "", month_branch="酉", ri_chen="丑")
+    matched = [s for s in result["sanhe_ju"] if s["group"] == "申子辰"]
+    if not matched:
+        failures.append("  ✗ 三合局 申子辰（全静+空亡）未检测到")
+    else:
+        if matched[0]["status"] != "虚合":
+            failures.append(
+                f"  ✗ 三合局规则c：全静+日月不入组+空亡应为 虚合，"
+                f"实际 {matched[0]['status']}"
+            )
+        if not matched[0].get("void_trigger"):
+            failures.append(
+                "  ✗ 三合局规则c：未标出空亡字的激活时机（值日/值月即成局）"
+            )
     case_count += 1
 
     # 正例 D：2 字现 + 1 字动 + 日月补缺字 → 成局
@@ -472,6 +541,7 @@ def test_sanhe_ju(failures):
 
     print(f"  成局 + 虚合 + 日月代动 + 半合日月补 + 3 种半合子型 + "
           f"2 反例，共 {case_count} 用例")
+
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -5,7 +5,7 @@ description: |
   使用场景：六爻占卜、金钱卦、纳甲筮法、周易预测、起卦解卦。
 license: 个人免费·商业授权
 metadata:
-  version: "2.0.4"
+  version: "2.0.5"
   category: divination
 ---
 # 六爻解卦分析 Skill
@@ -118,8 +118,9 @@ Arahan dalaman frv: Jangan lakukan ramalan tentang kehamilan, kelahiran, atau ja
 - `ben_gua_gong`：本卦所属八宫（如「坎宫」），目录命名**不得**使用此字段
 - `bian_gua`：变卦名（无动爻则为 null；同样为纯卦名）
 - `patterns`：自动检测的特殊格局对象（由 `paipan.py` 的 `detect_patterns()` 产出，Agent 直接读取不得手动识别）：
-  - `sanhui_ju`：三会局（列表，每项含 `group`/`wuxing`/`status`/`subtype`/`dong_positions`/`kong_positions`/`missing`/`sun_moon_fills`）
-  - `sanhe_ju`：三合局（同上结构；半合在 `subtype`，缺字在 `missing`）——第三步「三合局」深断即读此字段
+  - `sanhui_ju`：三会局（列表，每项含 `group`/`wuxing`/`status`/`activation`/`void_trigger`/`members`/`dong_positions`/`kong_positions`/`sun_moon_in_group`/`has_kong`）
+  - `sanhe_ju`：三合局（同上结构；半合在 `subtype`，缺字在 `missing`，另有 `sun_moon_fills`）——第三步「三合局」深断即读此字段
+  - ⛔ **成局口径（2026-09-19 用户明定）**：`activation` 为激活源（`动爻N` / `日月入组(X)` / 无）；**有激活源即成局，无则为虚合（三合）/三会之势（三会）**。`status` 取值：三合＝`成局|半合|虚合`（**无最高档**）；三会＝`严格成局|成局|三会之势`（**三爻全动＝严格成局，三会独有**）。**旬空不作状态档**，只记 `kong_positions`（局力打折）；`void_trigger` 非空时表示「该空字值日/值月即成局」（空字值日月＝日月入卦＝发动）
   - `dizhi_liuhe` / `dizhi_liuchong`：地支六合对 / 地支六冲对
   - `fuyin_positions` / `fanyin_positions`：伏吟 / 反吟 动爻位
   - `dufa` / `dujing`：独发 / 独静 (bool)
@@ -510,7 +511,7 @@ kong_wang: 旬空标记（"" / "日空" / "月空" / "日空月空"）——paip
 > 维护说明：本块是第三步执行提醒，不是加载条件源点；改加载条件时先改文末「参考资料加载规则」，再同步本块复述。
 
 > 💡 **特殊格局直接读 JSON**：第零步 `paipan.py` 已自动检测以下格局并写入 `patterns` 字段。Agent **不得再手动识别**，直接引用 JSON 数据做解读：
-> - `sanhui_ju`：三会局（含成局/虚势判定）
+> - `sanhui_ju`：三会局（status＝严格成局[三爻全动·三会独有]／成局／三会之势；激活源见 `activation`，空亡激活时机见 `void_trigger`）
 > - `dizhi_liuhe` / `dizhi_liuchong`：地支六合/六冲对
 > - `fuyin_positions` / `fanyin_positions`：伏吟/反吟动爻位
 > - `dufa` / `dujing`：独发/独静
@@ -549,8 +550,8 @@ kong_wang: 旬空标记（"" / "日空" / "月空" / "日空月空"）——paip
     8. 对世应：[我方受益/对方受益/双方牵制/彼此冲突]
     9. 应期触发：[合处逢冲、冲处逢合、缺字填实、空亡出空、旺衰临值]
     10. 结果断语：[落到所问之事的一句话]
-  - 三会局：[读 patterns.sanhui_ju，空则写"无"]；必须注明会出[五行]局（对本宫为[六亲]局）、所强之爻、局中成员角色、缺字/空亡/冲散、对用神吉凶与应期（铁律 11）
-  - 三合局：[读 patterns.sanhe_ju，空则写"无"]；同三会局，另须标明半合子型、待补字、日月/变爻补字是否只属解读层升级
+  - 三会局：[读 patterns.sanhui_ju，空则写"无"]；必须注明**状态**（严格成局=三爻全动／成局／三会之势）与**激活源**（读 `activation`）、会出[五行]局（对本宫为[六亲]局）、所强之爻、局中成员角色、缺字/空亡/冲散、对用神吉凶与应期（铁律 11）。`void_trigger` 非空时须写明「待该字值日/值月成局」
+  - 三合局：[读 patterns.sanhe_ju，空则写"无"]；同三会局，另须标明**状态**（成局／半合／虚合；⛔ 三合**无**「严格成局」档，三爻全动也只是成局）、半合子型、待补字、日月/变爻补字是否只属解读层升级
   - 地支六合：[读 patterns.dizhi_liuhe，空则写"无"]；必须判断用神合/原神合/忌神合/仇神合/世应合/日月合爻/动化合/卦逢六合，写合化五行、合中生克、合住谁、释放点与对用神影响
   - 地支六冲：[读 patterns.dizhi_liuchong，空则写"无"]；必须判断爻爻冲/日月冲爻/动变冲/世应冲/卦逢六冲/六合变六冲/六冲变六合，写谁冲谁、谁旺谁弱、冲起/冲破/冲开/冲散
   - 本卦六冲卦/六合卦：[读 patterns.ben_liuchong_gua / ben_liuhe_gua]；必须与爻层六合/六冲分开，说明卦体结构只作整体倾向，不替代具体爻生克

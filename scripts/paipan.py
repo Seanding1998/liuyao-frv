@@ -275,6 +275,13 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
       bian_gui_hun:   变卦归魂 bool（同上，无变卦时为 False）
 
     返回 dict。
+    局成局状态机（三合 / 三会 共用同一判定，用户口径 2026-09-19）：
+      **激活源** = ① 任一爻发动 ② 日月入组（日辰或月建占局中一字；
+                   空亡之字值日/值月即等于日月入组，故亦为激活）
+      **有激活源 → 成局**；**无激活源（全静且日月不入组）→ 虚合 / 三会之势**
+      **三会独有最高档：三爻全动 → 严格成局**；⛔ **三合无此档**
+      ⛔ 空亡**不作独立状态档**，只记入 kong_positions：局中一字旬空则局力打折，
+         出空 / 其值日值月补足（若尚未激活，其值日值月即为激活時点）
     """
     dizhi_list = [l["di_zhi"] for l in lines]
     dizhi_set = set(dizhi_list)
@@ -282,40 +289,44 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
     dong_count = len(dong_lines)
     dong_set = {l["di_zhi"] for l in dong_lines}
 
-    # ── 三会局：5 态（严格成局 / 成局 / 三会 / 三会之势）──
-    # 成局三路径：① 动爻激活  ② 日月临爻（日月之力=动爻）  ③ 动爻+空亡→出空成局
-    # 不成局：全静无日月临 / 全静有日月临但旬空压死 / 卦中缺字靠日月补
+    def _activation_of(dong_positions, group_tuple, month_branch, ri_chen):
+        """激活源：动爻 / 日月入组。返回 (是否激活, 说明文本)。"""
+        parts = []
+        if dong_positions:
+            parts.append("动爻" + ",".join(str(p) for p in dong_positions))
+        sm = [s for s in (month_branch, ri_chen) if s and s in group_tuple]
+        if sm:
+            parts.append("日月入组(" + "/".join(sm) + ")")
+        return bool(parts), "+".join(parts) if parts else "无"
+
+    # ── 三会局：3 态（严格成局 / 成局 / 三会之势）──
+    # 严格成局＝三爻全动（三会最高档，三合无此档）；成局＝有激活源；三会之势＝全静且日月不入组
+    # ⛔ 三会须三支全在卦内（缺一字不作会，不论半会）
     sanhui = []
     for group in DIZHI_SANHUI_GROUPS:
         present = [dz for dz in group if dz in dizhi_set]
         if len(present) != 3:
             continue
+        group_tuple = tuple(group)
         group_lines = [l for l in lines if l["di_zhi"] in group]
         dong_positions = [l["pos"] for l in group_lines if l["dong"]]
         sun_moon_in_group = (month_branch in group) or (ri_chen in group)
         kong_positions = [l["pos"] for l in group_lines if l.get("kong_wang")]
         has_kong = bool(kong_positions)
+        activated, activation = _activation_of(
+            dong_positions, group_tuple, month_branch, ri_chen)
 
-        # ── 有动爻：动则不空，动爻是激活源 ──
         if len(dong_positions) == 3:
-            status = "严格成局"
-        elif len(dong_positions) == 2 and sun_moon_in_group:
-            status = "严格成局"
-        elif len(dong_positions) >= 1:
-            if has_kong:
-                # 动爻不空（动则不空），空在它爻 → 暂时冻结，出空成局
-                status = "三会"
-            else:
-                status = "成局"
-        # ── 全静（无动爻）：日月之力可激活，但旬空会压死成局活力 ──
-        elif sun_moon_in_group:
-            if has_kong:
-                # 日月入组 + 空亡 → 空亡压死，出空也只是三会之势，无法成局
-                status = "三会之势"
-            else:
-                status = "成局"
+            status = "严格成局"          # 三会最高档：三爻全动
+        elif activated:
+            status = "成局"
         else:
             status = "三会之势"
+
+        void_trigger = ""
+        if has_kong and not activated:
+            void_trigger = ("局中一字旬空且全静、日月不入组：待该字值日/值月"
+                            "（＝日月入卦）即成局")
 
         # 组内每爻详情
         members = []
@@ -332,13 +343,16 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
             "group": "".join(group),
             "members": members,
             "status": status,
+            "activation": activation,
+            "void_trigger": void_trigger,
             "dong_positions": dong_positions,
             "kong_positions": kong_positions,
             "sun_moon_in_group": sun_moon_in_group,
             "has_kong": has_kong,
         })
 
-    # ── 三合局：3 档 + 日月引动 + 半合子型 ──
+    # ── 三合局：3 档（成局 / 半合 / 虚合）+ 日月补字 + 半合子型 ──
+    # ⛔ 三合**无**「严格成局」最高档：三爻全动也只是成局（与三会的区别所在）
     sanhe = []
     for g0, g1, g2, wx in DIZHI_SANHE_GROUPS:
         group_tuple = (g0, g1, g2)
@@ -347,31 +361,26 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
         group_lines = [l for l in lines if l["di_zhi"] in group_tuple]
         dong_positions = [l["pos"] for l in group_lines if l["dong"]]
         kong_positions = [l["pos"] for l in group_lines if l.get("kong_wang")]
+        has_kong = bool(kong_positions)
         has_dong = bool(dong_positions)
         sun_moon_fills = (
             len(missing_in_gua) == 1
             and missing_in_gua[0] in (month_branch, ri_chen)
         )
+        activated, activation = _activation_of(
+            dong_positions, group_tuple, month_branch, ri_chen)
 
-        if len(present_in_gua) == 3:
-            # 日月引动：日辰或月建占其中一字，可代替动爻激活合局
-            sun_moon_activates = (month_branch in group_tuple) or (ri_chen in group_tuple)
-            if has_dong:
-                status = "成局"
-            elif sun_moon_activates:
-                status = "成局"  # 日月引动
-            else:
-                status = "虚合"
-            subtype = ""
-            missing = ""
+        status = ""
+        subtype = ""
+        missing = ""
+        if len(present_in_gua) == 3 or sun_moon_fills:
+            # 三字俱全（三爻在卦，或二字＋日月补足缺字）
+            # 激活源＝动爻 或 日月入组 → 成局；全静且日月不入组 → 虚合
+            missing = missing_in_gua[0] if missing_in_gua else ""
+            status = "成局" if activated else "虚合"
         elif len(present_in_gua) == 2:
-            if sun_moon_fills:
-                # 二字 + 日月补字 = 三字俱全
-                status = "成局" if has_dong else "虚合"
-                subtype = ""
-                missing = missing_in_gua[0]
-            elif has_dong:
-                # 半合：二字现 + 含动爻
+            if has_dong:
+                # 半合：二字现 + 含动爻（未达三字，非成局档）
                 status = "半合"
                 present_set = set(present_in_gua)
                 if present_set == {g0, g1}:
@@ -380,19 +389,24 @@ def detect_patterns(lines, ben_gua_attr, bian_gua_attr, month_branch="", ri_chen
                     subtype = "帝旺墓库"
                 elif present_set == {g0, g2}:
                     subtype = "长生墓库"
-                else:
-                    subtype = ""
                 missing = missing_in_gua[0] if missing_in_gua else ""
             else:
                 continue  # 二字现 + 全静 + 无日月补 → 不记录
         else:
             continue  # 只 1 字 → 不记录
 
+        void_trigger = ""
+        if has_kong and not activated and status in ("成局", "虚合"):
+            void_trigger = ("局中一字旬空且全静、日月不入组：待该字值日/值月"
+                            "（＝日月入卦）即成局")
+
         sanhe.append({
             "group": g0 + g1 + g2,
             "wuxing": wx,
             "status": status,
             "subtype": subtype,
+            "activation": activation,
+            "void_trigger": void_trigger,
             "dong_positions": dong_positions,
             "kong_positions": kong_positions,
             "missing": missing,
