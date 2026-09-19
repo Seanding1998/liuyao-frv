@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""六爻卦象 HTML 报告生成器 v2.0.3。
+"""六爻卦象 HTML 报告生成器 v2.0.4。
 
 新增:
 - 本卦/变卦/互卦 三栏盘面展示
@@ -1213,7 +1213,7 @@ def main():
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
 
-    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v2.0.3")
+    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v2.0.4")
     parser.add_argument("--input", "-i", required=True, help="输入 JSON 文件路径")
     parser.add_argument("--output", "-o", default="liuyao-report.html", help="输出 HTML 文件路径")
     parser.add_argument("--validate", action="store_true",
