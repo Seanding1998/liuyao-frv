@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""六爻卦象 HTML 报告生成器 v2.0.6。
+"""六爻卦象 HTML 报告生成器 v2.0.7。
 
 新增:
 - 本卦/变卦/互卦 三栏盘面展示
@@ -13,6 +13,7 @@
 """
 
 import argparse
+import copy
 import html
 import json
 import os
@@ -68,6 +69,448 @@ def normalize_layer_text(value) -> str:
     if isinstance(value, dict):
         return "；".join(str(v).strip() for v in value.values() if str(v).strip())
     return str(value).strip()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 对外交付语言闸门（v2.0.7）
+#
+# 交付给问卦人的 HTML 报告只出「人话」——卦理与断语。
+# 解卦流程的内部痕迹（参考资料加载清单、门禁/准入、Tier 分级、审查报告编号、
+# 铁律编号、JSON 字段名、内部版本号等）不得出现在报告的可读区域。
+#
+# 作者约定（见 SKILL.md 铁律 18）：把这类内容包进 LIUYAO-INTERNAL 分隔区，写在
+# 步骤 md 文件内部：
+#     <!-- LIUYAO-INTERNAL:BEGIN -->
+#     ...（加载清单 / 门禁说明 / 审查留痕 / 修正记录）...
+#     <!-- LIUYAO-INTERNAL:END -->
+#
+# 生成报告时：
+#   1) 分隔区内容          → 折叠的「技术留痕」板块（默认收起，非断语）
+#   2) 未加分隔区的遗留脏句 → 逐从句/逐行剥离，同样收进技术留痕
+#   3) 剥离后仍残留黑名单词 → 清洗失败，--validate 报错阻断，逼作者改到分隔区里
+# ─────────────────────────────────────────────────────────────────────────────
+
+INTERNAL_BEGIN = "<!-- LIUYAO-INTERNAL:BEGIN -->"
+INTERNAL_END = "<!-- LIUYAO-INTERNAL:END -->"
+
+INTERNAL_BLOCK_RE = re.compile(
+    re.escape(INTERNAL_BEGIN) + r".*?" + re.escape(INTERNAL_END), flags=re.S
+)
+
+# 内部流程黑名单：命中即不得出现在问卦人可见文本中
+INTERNAL_TOKEN_RE = re.compile(
+    "|".join([
+        r"Tier",
+        r"待加载",
+        r"软?门禁",
+        r"准入条件",
+        r"强制",
+        r"加载",
+        r"本步已加载",
+        r"本步",
+        r"该步",
+        r"输出块",
+        r"检查点",
+        r"修正记录",
+        r"审查",
+        r"自检",
+        r"审查轮次",
+        r"单轮审查",
+        r"审查智能体",
+        r"审查\s*[A-D]\s*项",
+        r"判据",
+        r"假合规",
+        r"真读",
+        r"落盘",
+        r"预读",
+        r"路由表",
+        r"升降级",
+        r"十项深断",
+        r"深断",
+        r"\b[a-z]{3,}\s*=",
+        r"铁律\s*\d+",
+        r"原则\s*\d+",
+        r"技法\s*\d+",
+        r"步骤\s*\d+\s*附",
+        r"第\s*3\.5\s*步",
+        r"卦例目录",
+        r"卦例临时目录",
+        r"最终目录名",
+        r"排盘命令",
+        r"计算后端",
+        r"退出码",
+        r"sxtwl",
+        r"已\s*read",
+        r"术语校准",
+        r"受控词表",
+        r"触发条件",
+        r"必须引用",
+        r"本条权重",
+        r"不得",
+        r"禁止",
+        r"档位",
+        r"四档",
+        r"主流程",
+        r"智能体",
+        r"上下文隔离",
+        r"\bintent\b",
+        r"\bseed\b",
+        r"\bstatus\s*=",
+        r"\bpatterns\b",
+        r"\b[a-z][a-z0-9]*_[a-z0-9_]+\b",
+        r"~[/\\]Desktop",
+        r"[A-Za-z]:\\[^\s\"'`）)]*",
+        r"md\s*文件",
+        r"口径",
+        r"模板",
+        r"v[12]\.\d+\.\d+",
+        r"SKILL\.md",
+        r"`[A-Za-z0-9_\-]+\.md`",
+        r"[A-Za-z0-9_\-]+\.md",
+        r"references/[^\s，。）)、」]*\.md",
+        r"generate_report\.py",
+        r"paipan_result\.json",
+        r"liuyao-data\.json",
+        r"cand_\d+\.json",
+        r"\bJSON\b",
+        r"\bP\d{1,2}\b",
+    ])
+)
+
+# 内部编号标签：删「铁律 11」「原则10」「技法27.2」等编号，保留其后引文
+INTERNAL_LABEL_RE = re.compile(
+    r"(?:依|按|据|参见|参照|遵循|本于)?\s*(?:铁律|原则|技法)\s*\d+(?:\.\d+)?\s*[·、:：]?\s*"
+)
+
+# 打分记号（铁律 10：内部可量化，交付文本必须转自然语言）
+SCORE_MARK_RES = (
+    re.compile(r"[（(]\s*[＋+\-－]\s*\d\s*[）)]"),
+    re.compile(r"\*\*\s*[＋+\-－]\s*1\s*\*\*"),
+    re.compile(r"(?<![\d/])\s*[＋+\-－]\s*1\s*(?=([，。；、)）」』\"']|$))"),
+    re.compile(r"\bplus\s*1\b|\bminus\s*1\b"),
+)
+
+
+def _strip_score_marks(text: str) -> str:
+    out = text or ""
+    for rx in SCORE_MARK_RES:
+        out = rx.sub("", out)
+    out = re.sub(r"＝\s*总分\s*0", "＝ 中和", out)
+    out = re.sub(r"→\s*(?=[，。；、）)])", "", out)
+    out = re.sub(r"\s*([，。；、])", r"\1", out)
+    out = re.sub(r"（\s*）", "", out)
+    out = re.sub(r"，\s*，", "，", out)
+    return out
+
+# 从句级手术：优先只删整句里那一小截带黑名单词的从句，保住整行的卦理内容
+INTERNAL_CLAUSE_RES = (
+    re.compile(r"（[^（）\n]*）"),
+    re.compile(r"\([^()\n]*\)"),
+    re.compile(r"——[^。；\n]*"),
+    re.compile(r"\*\*[^*\n]+\*\*"),
+)
+
+# 纯脚手架标记行：【第N步·输出】/【第三步·附 — 伏神旁注】等
+STEP_MARKER_RE = re.compile(r"^\s*【[^】]*步[^】]*】\s*$")
+
+# references 加载清单块头（含 "- 本步已加载 …" 与 "## 本步已加载 …" 两种历史写法）
+LOAD_LIST_HEAD_RE = re.compile(r"^\s*(?:[-*+]\s+|#+\s*)?本步已加载")
+
+INDENTED_RE = re.compile(r"^(?:\s{2,}|\t)")
+QUOTE_LINE_RE = re.compile(r"^\s*>")
+# 清单块的续行形态：「- `xxx.md` 第N节…」这类以参考文件名开头的条目
+INTERNAL_LIST_ITEM_RE = re.compile(r"^\s*[-*+]\s*`?[A-Za-z0-9_\-]+\.md")
+# 纯引文行（只剩「…」与标点）——无上下文，判定为清单残渣
+QUOTE_ONLY_RE = re.compile(r"^[\s「」『』。；，、*\-—…·]*$")
+
+
+def _strip_internal_clauses(line: str) -> str | None:
+    """尝试从句级删除带黑名单词的从句；返回清洗结果（可能仍含黑名单词）。"""
+    out = line
+    changed = False
+    for _ in range(8):
+        spans = []
+        for rx in INTERNAL_CLAUSE_RES:
+            spans.extend(rx.finditer(out))
+        hit = None
+        for m in sorted(spans, key=lambda m: (len(m.group(0)), m.start())):
+            if INTERNAL_TOKEN_RE.search(m.group(0)):
+                hit = m
+                break
+        if not hit:
+            break
+        out = out[: hit.start()] + out[hit.end():]
+        changed = True
+    if not changed:
+        return None
+    return _tidy_fragment(out)
+
+
+def _tidy_fragment(text: str) -> str:
+    out = re.sub(r"[ \t]{2,}", " ", text)
+    out = re.sub(r"（\s*）", "", out)
+    out = re.sub(r"：\s*。", "。", out)
+    out = re.sub(r"，\s*。", "。", out)
+    out = re.sub(r"。\s*。", "。", out)
+    out = re.sub(r"[；，、]\s*([。；])", r"\1", out)
+    out = re.sub(r"([⚠️★🔺❗])\s*[：:，、]\s*", r"\1 ", out)
+    out = re.sub(r"[：:]\s*[：:，、]", "：", out)
+    out = re.sub(r"^[\s\-+，、：；]+(?=\S)", "", out)
+    return out.rstrip()
+
+
+def _cjk_len(text: str) -> int:
+    return len(re.findall(r"[\u4e00-\u9fff]", text or ""))
+
+
+def _split_clauses(text: str) -> list:
+    """按句读切分，但不在括号、引号、加粗标记内部切（防拆坏成对符号）。"""
+    parts, buf = [], []
+    depth, in_bold = 0, False
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if text.startswith("**", i):
+            in_bold = not in_bold
+            buf.append("**")
+            i += 2
+            continue
+        if ch in "（(「《【":
+            depth += 1
+        elif ch in "）)」》】":
+            depth = max(0, depth - 1)
+        buf.append(ch)
+        if depth == 0 and not in_bold and ch in "；。：，":
+            parts.append("".join(buf))
+            buf = []
+        i += 1
+    if buf:
+        parts.append("".join(buf))
+    return parts
+
+
+def _drop_dirty_clauses(text: str):
+    """按句读切分，只丢弃含黑名单词的子句，保住同一行里的卦理内容。
+
+    返回 (结果文本, 是否丢弃过子句)。长段落（如第三步特殊格局深断）里的
+    「来源=JSON patterns」这类内部指引只占一个子句，不应因此丢掉整段分析。
+    被丢弃的子句若带长引文（「…」），把引文抢救回来——引文是断卦依据。
+    """
+    parts = _split_clauses(text)
+    kept, dropped = [], False
+    for part in parts:
+        if not part.strip():
+            continue
+        if not INTERNAL_TOKEN_RE.search(part):
+            kept.append(part)
+            continue
+        surgery = _strip_internal_clauses(part)
+        if surgery is not None and not INTERNAL_TOKEN_RE.search(surgery) and _cjk_len(surgery) >= 4:
+            kept.append(surgery)
+            continue
+        quotes = re.findall(r"「[^」]{12,}」", part)
+        if quotes:
+            kept.append("".join(quotes) + "。")
+        dropped = True
+    return _tidy_fragment("".join(kept)), dropped
+
+
+def sanitize_client_text(text, label: str, fragments: dict) -> str:
+    """把一段内部文本清洗成「问卦人可读」版本。
+
+    被剥离的内容按 label 归集进 fragments（用于生成折叠的「技术留痕」板块）。
+    处理顺序：整段分隔区 → 清单块 → 行内从句手术 → 子句级丢弃 → 整行移入留痕。
+    """
+    if text is None:
+        return text
+    raw = str(text)
+    if not raw.strip():
+        return raw
+
+    remainder, block_frags = strip_internal_blocks(raw)
+    for chunk in block_frags:
+        fragments.setdefault(label, []).append(chunk)
+
+    keep, buf = [], []
+
+    def flush():
+        chunk = "\n".join(buf).strip("\n")
+        if chunk.strip():
+            fragments.setdefault(label, []).append(chunk)
+        buf.clear()
+
+    lines = remainder.split("\n")
+    i = 0
+    while i < len(lines):
+        line = INTERNAL_LABEL_RE.sub("", lines[i])
+        if STEP_MARKER_RE.match(line):
+            i += 1
+            continue
+        if LOAD_LIST_HEAD_RE.match(line):
+            start = i
+            i += 1
+            while i < len(lines) and (
+                not lines[i].strip()
+                or INDENTED_RE.match(lines[i])
+                or QUOTE_LINE_RE.match(lines[i])
+                or INTERNAL_LIST_ITEM_RE.match(lines[i])
+            ):
+                i += 1
+            flush()
+            fragments.setdefault(label, []).append(
+                "\n".join(lines[start:i]).strip("\n")
+            )
+            continue
+        if INTERNAL_TOKEN_RE.search(line):
+            surgery = _strip_internal_clauses(line)
+            if (
+                surgery is not None
+                and not INTERNAL_TOKEN_RE.search(surgery)
+                and _cjk_len(surgery) >= 6
+            ):
+                if buf:
+                    flush()
+                keep.append(surgery)
+                i += 1
+                continue
+            dropped_text, _dropped = _drop_dirty_clauses(line)
+            if (
+                dropped_text
+                and not INTERNAL_TOKEN_RE.search(dropped_text)
+                and _cjk_len(dropped_text) >= 6
+                and not QUOTE_ONLY_RE.match(dropped_text)
+            ):
+                if buf:
+                    flush()
+                keep.append(dropped_text)
+            else:
+                buf.append(line)
+            i += 1
+            continue
+        if buf:
+            flush()
+        keep.append(line)
+        i += 1
+
+    flush()
+    cleaned = "\n".join(keep)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return _strip_score_marks(cleaned.strip("\n"))
+
+
+def strip_internal_blocks(text: str):
+    """抽出 LIUYAO-INTERNAL 分隔区；返回 (剩余文本, [分隔区原文...])。"""
+    frags = []
+
+    def _take(m):
+        frags.append(m.group(0))
+        return ""
+
+    return INTERNAL_BLOCK_RE.sub(_take, text or ""), frags
+
+
+def find_internal_tokens(text) -> list:
+    """返回文本中命中的黑名单词（去重、保序），供校验与验收使用。"""
+    if not text:
+        return []
+    hits = []
+    for m in INTERNAL_TOKEN_RE.finditer(str(text)):
+        tok = m.group(0)
+        if tok not in hits:
+            hits.append(tok)
+    return hits
+
+
+# 内部流程字段：整段都属于流程留痕，不进可读区（如第八步审查报告）
+AUDIT_STEP_KEYS = ("integrity", "cross_check", "principles", "final", "summary")
+
+# md_full 中面向问卦人的键；其余键（审查报告原文等）整段进技术留痕
+MD_FULL_CLIENT_KEYS = ("step0", "step1", "step2", "step3", "step3_fu",
+                       "step4", "step5", "step6", "step7")
+
+
+def build_client_view(data: dict):
+    """生成对外交付视图。
+
+    返回 (client_data, fragments, residual)：
+    - client_data：剥离内部痕迹后的深拷贝，供 generate() 渲染
+    - fragments：{步骤标签: [被剥离的内部原文...]}
+    - residual：清洗后仍残留的黑名单词（空 = 干净）
+    """
+    client = copy.deepcopy(data)
+    fragments: dict = {}
+
+    def clean(value, label):
+        if isinstance(value, str):
+            return sanitize_client_text(value, label, fragments)
+        if isinstance(value, list):
+            return [clean(v, label) for v in value]
+        if isinstance(value, dict):
+            return {k: clean(v, label) for k, v in value.items()}
+        return value
+
+    steps = client.get("steps", {}) if isinstance(client.get("steps"), dict) else {}
+    for step_key, step_val in list(steps.items()):
+        if not isinstance(step_val, dict):
+            continue
+        label = step_key
+        if step_key == "step8":
+            # 第八步整份都是审查留痕：原文全进技术留痕，可读区只留一句人话结论
+            audit_chunks = []
+            for fld in AUDIT_STEP_KEYS:
+                if step_val.get(fld):
+                    audit_chunks.append(f"【{fld}】\n{step_val[fld]}")
+            if audit_chunks:
+                fragments.setdefault(label, []).append("\n\n".join(audit_chunks))
+            for fld in AUDIT_STEP_KEYS:
+                if fld in step_val:
+                    step_val[fld] = ""
+            continue
+        for fld, val in list(step_val.items()):
+            step_val[fld] = clean(val, label)
+
+    md_full = client.get("md_full")
+    if isinstance(md_full, dict):
+        for key, content in list(md_full.items()):
+            if key not in MD_FULL_CLIENT_KEYS:
+                # 审查报告等不面向问卦人的正文：整段进技术留痕（不丢内容）
+                if str(content or "").strip():
+                    fragments.setdefault(key, []).append(str(content))
+                md_full[key] = ""
+                continue
+            md_full[key] = sanitize_client_text(content, key, fragments)
+
+    residual = []
+    for label, text in _iter_client_strings(client):
+        for tok in find_internal_tokens(text):
+            residual.append(f"{label}: {tok}")
+    return client, fragments, sorted(set(residual))
+
+
+def _iter_client_strings(client):
+    """遍历对外视图中所有会被渲染成文本的字符串（用于残留复检）。
+
+    只取字符串叶子，不把 dict 的键序列化进来——JSON 键名不会被渲染。
+    """
+
+    def walk(value, path):
+        if isinstance(value, str):
+            yield path, value
+        elif isinstance(value, list):
+            for i, v in enumerate(value):
+                yield from walk(v, f"{path}[{i}]")
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                yield from walk(v, f"{path}.{k}")
+
+    yield "meta.question", str(client.get("meta", {}).get("question", ""))
+    for step_key, step_val in (client.get("steps") or {}).items():
+        label = STEP_NAMES.get(step_key, step_key)
+        yield from walk(step_val, label)
+    md_full = client.get("md_full")
+    if isinstance(md_full, dict):
+        for key, content in md_full.items():
+            yield f"md_full.{key}", str(content)
 
 
 SCENARIO_YINGQI_LAYER_REQUIREMENTS = {
@@ -440,7 +883,7 @@ body {{
 .wx-火 {{ color: #c94c4c; }}
 .wx-土 {{ color: #8b7355; }}
 
-/* 旺相休囚死（v1.9.0 五行之气月令流转） */
+/* 旺相休囚死（五行之气随月令流转） */
 .wxs-sub  {{ font-size: 13px; color: #9e8b7a; margin: 4px 0 12px; }}
 .wxs-row  {{ display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 32px; }}
 .wxs-card {{ flex: 1; min-width: 130px; max-width: 170px; background: #faf7f2; border: 1px solid #d4c5b2; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; line-height: 1.2; }}
@@ -494,6 +937,20 @@ h3 {{ font-size: 16px; color: #6b5a4e; margin: 16px 0 8px; }}
 .md-full-section {{ margin-bottom: 20px; }}
 .md-full-section h3 {{ color: #5c3d2e; margin: 0 0 8px 0; font-size: 15px; }}
 .md-full-intro {{ color: #9e8b7a; font-size: 13px; margin-bottom: 16px; }}
+
+/* 技术留痕（默认收起 · 内部流程记录，非断语） */
+.tech-trail {{ margin-top: 40px; border: 1px dashed #d4c5b2; border-radius: 8px; background: #f7f4ee; }}
+.tech-trail > summary {{
+  cursor: pointer; padding: 12px 18px; font-size: 13px; color: #8b7355;
+  font-weight: bold; letter-spacing: 1px; list-style: none;
+}}
+.tech-trail > summary::-webkit-details-marker {{ display: none; }}
+.tech-trail > summary::before {{ content: "▸ "; }}
+.tech-trail[open] > summary::before {{ content: "▾ "; }}
+.tech-trail[open] > summary {{ border-bottom: 1px dashed #d4c5b2; }}
+.tech-trail-note {{ padding: 12px 18px 0; font-size: 12px; color: #9e8b7a; line-height: 1.7; }}
+.tech-trail .md-full-section {{ padding: 0 18px; }}
+.tech-trail .step-full {{ font-size: 12px; color: #6b5a4e; background: #fff; }}
 
 /* 页脚 */
 .report-footer {{ margin-top: 48px; padding-top: 24px; border-top: 1px solid #d4c5b2; text-align: center; font-size: 12px; color: #9e8b7a; }}
@@ -613,7 +1070,10 @@ function toggleCuoZong() {{
 <!-- 11. 解卦过程全文（md_full 附录，逐字保真） -->
 {md_full_block}
 
-<!-- 12. 校验印记 -->
+<!-- 12. 技术留痕（内部流程记录，默认收起） -->
+{tech_trail_block}
+
+<!-- 13. 校验印记 -->
 <footer class="report-footer">
   <p class="verify-stamp">{verify_result}</p>
   <p class="generate-time">报告生成时间：{generate_time}</p>
@@ -858,6 +1318,7 @@ STEP_NAMES = {
     "step1": "第一步 · 审题取用神",
     "step2": "第二步 · 判定旺衰",
     "step3": "第三步 · 追踪动变",
+    "step3_fu": "第三步·附 · 伏神旁注",
     "step3_5": "第3.5步 · 伏神分析",
     "step4": "第四步 · 世应关系",
     "step5": "第五步 · 六神兽取象",
@@ -871,11 +1332,13 @@ def build_md_full_block(md_full: dict) -> str:
     """渲染「解卦过程全文」附录板块：逐字展示各步骤 md 原文（pre-wrap）。
 
     md_full 缺失或为空时返回空字符串（板块自动隐藏，不报错）。
+    传入的 md_full 已由 build_client_view() 剥离内部流程痕迹。
     """
     if not md_full:
         return ""
     sections = []
-    for key in ("step0", "step1", "step2", "step3", "step4", "step5", "step6", "step7"):
+    for key in ("step0", "step1", "step2", "step3", "step3_fu",
+                "step4", "step5", "step6", "step7"):
         content = md_full.get(key)
         if not content or not str(content).strip():
             continue
@@ -890,12 +1353,70 @@ def build_md_full_block(md_full: dict) -> str:
         return ""
     return (
         '<h2>📜 解卦过程全文</h2>'
-        '<p class="md-full-intro">以下为解卦各步骤的完整分析原文（与卦例目录中步骤 md 文件逐字一致），供复核完整推理过程。</p>'
+        '<p class="md-full-intro">以下为本次解卦各步骤的完整分析原文，供复核推理过程。'
+        '流程性记录（参考资料目录、自我检查痕迹、复核意见等）已移入文末'
+        '「🔧 技术留痕」，不影响阅读，需要时展开即可。</p>'
         + "\n".join(sections)
     )
 
 
+def build_tech_trail_block(fragments: dict, verify_raw: str = "") -> str:
+    """渲染折叠的「技术留痕」板块（默认收起）：内部流程记录不进可读区。"""
+    sections = []
+    if isinstance(fragments, dict):
+        for key in ("step0", "step1", "step2", "step3", "step3_fu", "step3_5", "step4",
+                    "step5", "step6", "step7", "step8"):
+            chunks = fragments.get(key)
+            if not chunks:
+                continue
+            name = STEP_NAMES.get(key, key)
+            body = "\n\n".join(str(c).strip() for c in chunks if str(c).strip())
+            if not body:
+                continue
+            sections.append(
+                '<div class="md-full-section">'
+                f'<h3>{name}</h3>'
+                f'<div class="step-full">{render_text_with_emphasis(body)}</div>'
+                '</div>'
+            )
+    verify_block = ""
+    if verify_raw and str(verify_raw).strip():
+        verify_block = (
+            '<div class="md-full-section"><h3>独立审查最终结论（原文）</h3>'
+            f'<div class="step-full">{render_text_with_emphasis(verify_raw)}</div></div>'
+        )
+    if not sections and not verify_block:
+        return ""
+    return (
+        '<details class="tech-trail">'
+        '<summary>🔧 技术留痕（默认收起 · 非断语，问卦人可跳过）</summary>'
+        '<p class="tech-trail-note">以下为解卦流程的内部执行记录——各步参考资料加载清单、'
+        '流程门禁与自检痕迹、独立审查报告原文、修正记录等。它们用于复核流程是否按规执行，'
+        '与卦理断语无关；展开查看仅作留痕，不影响上方任何结论。</p>'
+        + "".join(sections)
+        + verify_block
+        + '</details>'
+    )
+
+
 def generate(data: dict, output_path: str) -> str:
+    # 对外交付语言闸门：先剥离内部流程痕迹，再渲染（原文进「技术留痕」折叠区）
+    verify_raw = ""
+    if isinstance(data.get("steps", {}).get("step8"), dict):
+        s8_raw = data["steps"]["step8"]
+        verify_raw = str(s8_raw.get("final") or s8_raw.get("summary") or "")
+    data, internal_fragments, residual = build_client_view(data)
+    if residual:
+        print(
+            "⚠️ 对外文本仍残留内部流程词（未加 LIUYAO-INTERNAL 分隔区，"
+            "已无法自动清洗）：" + "；".join(residual[:12]),
+            file=sys.stderr,
+        )
+    print(
+        f"   技术留痕：已折叠 {sum(len(v) for v in internal_fragments.values())} 段内部流程记录"
+        f"（默认收起，不进可读区）"
+    )
+
     meta = data["meta"]
     yao = data["yao"]
     steps = data["steps"]
@@ -955,8 +1476,20 @@ def generate(data: dict, output_path: str) -> str:
     # 神煞渲染
     shensha_html = build_shensha_section(meta, yao)
 
-    # 解卦过程全文附录（md_full，缺失时自动隐藏板块）
+    # 解卦过程全文附录（md_full，缺失时自动隐藏板块；已剥离内部痕迹）
     md_full_block = build_md_full_block(data.get("md_full", {}))
+
+    # 技术留痕折叠区（内部流程记录 + 审查原文，默认收起）
+    tech_trail_block = build_tech_trail_block(internal_fragments, verify_raw)
+
+    # 页脚校验印记：只出一句人话，内部审查原文收进技术留痕
+    if verify_raw.strip() and not find_internal_tokens(verify_raw):
+        verify_display = f"✅ {verify_raw.strip()}"
+    else:
+        verify_display = (
+            "✅ 已通过独立校验：审查发现的问题已在解卦过程中逐一修正"
+            "（流程细节见文末「🔧 技术留痕」）"
+        )
 
     html = HTML_TEMPLATE.format(
         ben_gua=meta["ben_gua"],
@@ -986,7 +1519,8 @@ def generate(data: dict, output_path: str) -> str:
         shensha_block=shensha_html,
         final_block=build_final_block(s7),
         md_full_block=md_full_block,
-        verify_result=f"✅ {s8.get('final', s8.get('summary', '校验完成'))}",
+        tech_trail_block=tech_trail_block,
+        verify_result=verify_display,
         generate_time=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
 
@@ -1206,14 +1740,31 @@ def validate_json(data):
                         )
                     break
 
-    return (len(errors) == 0, errors)
+    # ── 对外交付语言校验（v2.0.7：交付报告只出人话，内部痕迹必须折叠）──
+    try:
+        _client, fragments, residual = build_client_view(data)
+        if residual:
+            errors.append(
+                "对外文本残留内部流程词（报告将出现「不说人话」的流程黑话）："
+                + "、".join(residual[:10])
+                + "。请把这些内容移进 <!-- LIUYAO-INTERNAL:BEGIN --> … "
+                "<!-- LIUYAO-INTERNAL:END --> 分隔区（见 SKILL.md 铁律 18）。"
+            )
+        elif not fragments:
+            errors.append(
+                "未识别到任何内部流程留痕（LIUYAO-INTERNAL 分隔区 / 加载清单块）。"
+                "请确认各步骤 md 已按铁律 15 写入参考资料加载清单——清单缺失即为步骤无效。"
+            )
+    except Exception as exc:  # 清洗器异常不得静默放过
+        errors.append(f"对外语言清洗失败：{exc}")
 
+    return (len(errors) == 0, errors)
 
 def main():
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
 
-    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v2.0.6")
+    parser = argparse.ArgumentParser(description="六爻卦象 HTML 报告生成器 v2.0.7")
     parser.add_argument("--input", "-i", required=True, help="输入 JSON 文件路径")
     parser.add_argument("--output", "-o", default="liuyao-report.html", help="输出 HTML 文件路径")
     parser.add_argument("--validate", action="store_true",
@@ -1231,7 +1782,9 @@ def main():
     if args.validate:
         ok, errors = validate_json(data)
         if ok:
-            print("✅ Schema OK")
+            _client, fragments, _residual = build_client_view(data)
+            moved = sum(len(v) for v in fragments.values())
+            print(f"✅ Schema OK（已识别 {moved} 段内部流程留痕，将折叠进「技术留痕」区）")
             sys.exit(0)
         else:
             print(f"❌ Schema 校验失败（{len(errors)} 项）：", file=sys.stderr)
@@ -1428,7 +1981,8 @@ def build_patterns_section(patterns, step3_pattern=""):
         rendered = render_text_with_emphasis(deep_text)
         return (
             '<h2>特殊格局</h2>\n'
-            '<p class="md-full-intro">以下优先展示第三步写入的特殊格局深断；自动检测只负责识别，不替代解读。</p>\n'
+            '<p class="md-full-intro">以下为卦中特殊格局的逐项解读：成局与否由排盘自动识别，'
+            '吉凶落到何事则由卦理逐条说透。</p>\n'
             f'<div class="step-full pattern-deep">{rendered}</div>'
         )
 

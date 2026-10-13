@@ -29,6 +29,7 @@
 | TL-15 | 每步自检门禁 | 数据权威 | `SKILL.md` 全局执行铁律、各步输出块 | `references/*`、第八步审查 D 项 | 防止纸面合规、reference 假读、只列文件名不摘关键句 | 清单必须含关键句摘录，未摘录等同步骤无效 |
 | TL-16 | 流程抗疲劳 | 运行协议 | `SKILL.md` 全局执行铁律 | `SKILL.md` 第零步附路由表 | 防止同会话第二卦以后因熟悉感跳过预读和门禁 | 不设强校验，但不得删除醒脑约束 |
 | TL-17 | 立币作废 | 运行协议 | `SKILL.md` 全局执行铁律、第零步 | `scripts/paipan.py`、`scripts/test_gua_patterns.py` | 防止忽略退出码 3、把作废卦当正常卦解，或当场重摇抹掉立币征兆 | 每枚硬币落地同源同抽定正/反/立；概率口径、退出码 3、作废话术变更需同步脚本、测试与第零步 |
+| TL-18 | 对外只出人话 | 表达规范 | `SKILL.md` 全局执行铁律、第九步 | `references/html-report-guide.md` 1.4 节、`scripts/generate_report.py` | 防止内部流程语（Tier／门禁／落盘／审查编号／JSON 字段名／脚本路径）混进交付报告，问卦人看不懂 | 内部痕迹写进 `<!-- LIUYAO-INTERNAL:BEGIN -->`…`<!-- LIUYAO-INTERNAL:END -->`，生成器折叠进「🔧 技术留痕」；禁用词表变更需同步 `INTERNAL_TOKEN_RE`、guide 1.4 节与 `--validate` |
 
 ## 核心原则索引
 
