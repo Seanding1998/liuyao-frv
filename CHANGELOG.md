@@ -11,6 +11,30 @@
 - **应期单位下探**：重点回看 v2.0.8；合绊为唯一卡点且结构已成时，应期从「冲开之支」最近出现处逐级下探（时辰存疑→以日为准→月兜底），不得径直跳到换月。
 - **规则编号检索**：见 `references/rule-index.md`；`TL-*` 为 SKILL.md 铁律，`PR-*` 为 `jie-gua-xiang-jie.md` 核心原则。
 - **对外交付措辞**：重点回看 v2.0.7；交付报告只出人话，内部留痕写进 `LIUYAO-INTERNAL` 分隔区并折叠进「🔧 技术留痕」，`--validate` 扫描禁用词。
+- **起卦熵源**：重点回看 v2.0.9；`scripts/entropy.py` 负责取熵与出数，`paipan.py` 只调用不实现。改随机源时勿动 `--seed` 分支（历史卦例重放依赖它逐位一致）。
+
+## v2.0.9 (2026-11-16)
+
+### 起卦熵源重做：物理熵 → 健康检测 → HKDF → HMAC-DRBG——同构 main v2.0.9
+
+> 起因：原 `make_time_rng()` 是 `random.Random(time.time_ns() ^ urandom64)`。它在密码学上并不算弱（异或一个真随机数，结果仍是真随机），但有三处说不通：① **纳秒时钟对种子的熵贡献是 0 bit**——异或只是把明文藏进一次性密码本，而注释宣称"锁死在起卦那一刻"，数学上不成立，真正提供熵的只有 urandom 的 64 bit；② 终端算法是 MT19937，状态可由 624 个输出还原，单卦只取 18 个数虽不可利用，但它不是为"不可预测"设计的；③ 来源不可见，事后无法回答"这一卦的随机数从哪来"。
+
+**脚本层**：
+- 新增 `scripts/entropy.py`（纯标准库，无第三方依赖）：
+  - **L1 硬件熵**：RDSEED / RDRAND。没有 C 编译器也跑得起来——用 `VirtualAlloc`/`mmap` 写一段 18 字节机器码直接执行，Windows 走 RCX 传参、System V 走 RDI；CPUID.07H:EBX[18] 探针同样以机器码实现，RBX 按 ABI push/pop 保存。macOS 一律关闭该路径（Apple Silicon 无 RDRAND/RDSEED 且 arm64 匿名可执行页被 W^X 挡），改走 `SecRandomCopyBytes`
+  - **L2 平台熵**：macOS `SecRandomCopyBytes` → `getentropy` → `arc4random_buf`；Linux `getrandom(2)` → `getentropy(3)` → `/dev/hwrng`；Windows `BCryptGenRandom`
+  - **L3 系统熵**：`os.urandom` 三平台兜底；**L4/L5**：`perf_counter_ns` 差分（实测约 0.96 bit/byte，只作补充）与环境噪声
+  - **L6 健康检测**：SP 800-90B 的 RCT（重复计数）+ APT（自适应比例），失败即抛错拒绝出数，不降级
+  - **L7 条件化**：HKDF-SHA256-Extract，**天时作 salt 不作熵**（语义诚实：绑定时刻，不冒充熵源）
+  - **L8 扩展**：HMAC-SHA256 计数器模式 + 拒绝采样，输出区间严格均匀，且计数器单调不可回退
+  - 自带 `--selftest`（卡方、立币概率、种子独立性、`--seed` 一致性）与 `--describe`；环境变量 `LIUYAO_ENTROPY_DISABLE_HW=1` 可关闭机器码路径
+- `paipan.py`：`make_time_rng()` 改为调用 `entropy.divination_rng()`；模块缺失时回退旧行为并在 stderr 说明。`build_paipan_data()` 新增 `entropy_info` 参数，把来源写入 JSON 顶层 `entropy` 字段（`sources`/`primary`/`platform`/`health`/`seed_sha256`/`timestamp_ns`）。`--seed` 分支**不动**，继续用 `random.Random(seed)`
+- `SKILL.md`：第零步「摇卦随机源」说明重写；第零步强制输出新增「熵源」行
+
+**实测（Windows / AMD Ryzen AI 9 H 365；Linux WSL Fedora / Python 3.14）**：
+RDSEED 16/16 执行成功；0..9999 取 20 万次卡方 z=+0.54 / +0.15；立币 2/10000 实测 0.0193% / 0.0207%（期望 0.0200%）；`--seed 42` 两平台均得 ygua=112413；seed ∈ {42, 7, 99, 2026, 0, -5} 新旧版本 `ygua` **逐位一致**；`test_gua_patterns.py` 13 类测试全过。
+
+**回归**：`check_release_consistency.py` 通过（五处版本号同步 v2.0.9）；`test_gua_patterns.py` 全过。本次为熵源层变更，不涉及排盘规则与报告生成逻辑。
 
 ## v2.0.8 (2026-11-05)
 

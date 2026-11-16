@@ -171,6 +171,7 @@ HTML 报告使用内联 CSS，无需外部依赖。报告内含 **「旺相休�
 | reference 加载路由 | `SKILL.md` 文末「参考资料加载规则」 | 步骤内执行复述、第零步路由表、第八步 D 项 |
 | HTML schema 与报告展示 | `references/html-report-guide.md`、`scripts/generate_report.py` | `generate_report.py --validate`、README 当前版本说明 |
 | 格局检测 | `scripts/paipan.py` | `scripts/test_gua_patterns.py`、铁律 11/13、相关 references |
+| 起卦熵源 | `scripts/entropy.py` | `entropy.py --selftest`、`paipan.py --seed N` 逐位复现（六个历史种子比对） |
 | 应期分层校验 | `references/yingqi-faze.md`、`scripts/generate_report.py` | `SKILL.md` 第六步、HTML guide 的 `step6.layers` schema |
 | 版本发布 | `SKILL.md` frontmatter | README、CHANGELOG、HTML guide、脚本 CLI、`scripts/check_release_consistency.py` |
 
@@ -200,6 +201,7 @@ python scripts\check_release_consistency.py
 ## 📅 当前版本
 
 ### v2.0.x（当前）
+- **v2.0.9** — 起卦熵源重做（同构 main v2.0.9）：新增 `scripts/entropy.py`（Windows/macOS/Linux 三平台分层取熵）——硬件熵 RDSEED/RDRAND（x86_64，纯 Python 直接执行机器码）→ 平台熵（macOS `SecRandomCopyBytes`、Linux `getrandom`、Windows `BCryptGenRandom`）→ `os.urandom` → 计时抖动与环境噪声，经 SP 800-90B 的 RCT/APT 健康检测后用 HKDF-SHA256 条件化成 256-bit 种子，再由 HMAC-SHA256 计数器模式 + 拒绝采样出数；天时只作 salt 不冒充熵，来源写入 JSON `entropy` 字段。`--seed` 复现路径逐位保持原样（已用 6 个种子与旧版比对一致）
 - **v2.0.8** — 应期法则「合绊独卡的逐级下探法」（同构 main v2.0.8）：合绊为**唯一**卡点且卦中结构已成（成局／忌神空破／日辰坐实）时，应期从「冲开之支」最近的出现处逐级下探——**时辰（⚠️存疑，仅当日内细化参考）→ 日（以日为准）→ 月（兜底）**，不得径直跳到换月；应期单位选择之时令层面同步标存疑。源自 26.11 占例（泽地萃之风地观，个人事项细节略）事后回访：机制三项全中，唯单位层级停在日/月层致主窗口偏晚两周
 - **v2.0.7** — 对外交付语言闸门（同构 main v2.0.7）：新增铁律 18「对外只出人话」——交付报告的可读区只出卦理与断语，内部流程语（Tier／门禁／落盘／审查编号／铁律·原则编号／`.md` 文件名／JSON 字段名／脚本路径）一律不得出现；内部留痕写进 `<!-- LIUYAO-INTERNAL:BEGIN -->`…`<!-- LIUYAO-INTERNAL:END -->` 分隔区，生成报告时自动折叠进默认收起的「🔧 技术留痕」区（内容不丢）；旧稿里散落的流程语由脚本逐从句剥离、打分记号转自然语言；`--validate` 新增禁用词扫描并报错阻断。同时修掉旧版两处缺陷：页脚「修正记录」悬空引用、伏神旁注（`step3_fu`）全文在报告中不可见
 

@@ -5,7 +5,8 @@
 
 功能：
   - 三币摇卦法随机生成六爻（从初爻到上爻）
-  - 摇卦随机源：默认采用时间随机（纳秒时钟 × 操作系统物理熵，锁死在起卦此刻）；
+  - 摇卦随机源：默认由 entropy.py 分层取熵（RDSEED/平台熵/os.urandom/计时抖动）
+    → SP 800-90B 健康检测 → HKDF-SHA256 条件化 → HMAC-DRBG 扩展；
     指定 --seed 时改用可复现的伪随机（用于"重看同一卦"）
   - 逐枚立币三态：每枚硬币落地那一刻，由同一次抽取当场定为「正/反/立」，
     单枚立起约 1/6000；任意一枚立起 → 整卦作废（退出码 3，不产出卦象）
@@ -55,6 +56,20 @@ try:
 except ImportError:
     pass
 
+# ── 起卦熵源（同目录 entropy.py，三平台分层取熵）────────────
+_ENTROPY_AVAILABLE = False
+_entropy = None
+try:
+    import entropy as _entropy
+    _ENTROPY_AVAILABLE = True
+except ImportError:
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import entropy as _entropy
+        _ENTROPY_AVAILABLE = True
+    except ImportError:
+        _entropy = None
+
 # ═══════════════════════════════════════════════════════════════
 #  立币作废
 # ═══════════════════════════════════════════════════════════════
@@ -100,15 +115,29 @@ class CoinEdgeError(Exception):
 # ═══════════════════════════════════════════════════════════════
 
 def make_time_rng():
-    """时间随机源：以纳秒时钟混合操作系统物理熵播种。
+    """起卦随机源：分层取物理熵 → 健康检测 → HKDF 条件化 → HMAC-DRBG。
 
-    摇卦结果应锁死在**起卦那一刻**：用 time.time_ns()（纳秒分辨率）
-    异或 os.urandom(8)（操作系统从硬件时序/中断等采集的物理熵）作为种子，
-    再驱动一个独立 RNG。既非可预测的固定序列，也不像裸取时钟低位那样
-    受时钟粒度影响产生规律。
+    旧版是 `random.Random(time.time_ns() ^ urandom64)`。它在密码学上不算弱
+    （异或真随机仍是真随机），但纳秒时钟对种子的熵贡献是 0 bit——异或只是
+    一次性密码本，把明文藏起来，并没有增加信息。真正提供 64 bit 的只有
+    urandom，而终端算法还是可被状态还原的 MT19937。
 
-    返回 random.Random；每次调用都得到互相独立、不可复现的实例。
+    现在改为调用 entropy.divination_rng()：
+      1. L1 RDSEED / RDRAND（x86_64 硬件热噪声，Windows/Linux 可用）
+      2. L2 平台熵（macOS SecRandomCopyBytes、Linux getrandom、Windows BCryptGenRandom）
+      3. L3 os.urandom（三平台兜底）
+      4. L4 计时器抖动 + L5 环境噪声（低熵补充）
+      5. SP 800-90B 的 RCT/APT 健康检测，失败即拒绝出数
+      6. HKDF-SHA256 条件化成 256-bit 种子；天时只作 salt，不作熵
+      7. HMAC-SHA256 计数器模式扩展，拒绝采样保证区间均匀
+
+    返回带 randint/randbelow/getrandbits 的对象；每次调用互相独立、不可复现。
+    若 entropy.py 不在（旧副本或裁剪安装），自动回退到旧行为并在 stderr 说明。
     """
+    if _ENTROPY_AVAILABLE and _entropy is not None:
+        return _entropy.divination_rng()
+
+    print("警告：entropy.py 不可用，回退到旧版时间随机源", file=sys.stderr)
     seed_int = time.time_ns() ^ int.from_bytes(os.urandom(8), "big")
     return random.Random(seed_int)
 
@@ -1347,10 +1376,12 @@ class LiuYaoPaipan:
     # ── 排盘 ────────────────────────────────────────────
 
     @staticmethod
-    def build_paipan_data(ygua, year, month, day, hour, minute, subject, intent, seed=None):
+    def build_paipan_data(ygua, year, month, day, hour, minute, subject, intent, seed=None,
+                          entropy_info=None):
         """
         主入口：输入 ygua（6 位 1-4 编码列表，自下而上），输出完整 JSON 数据。
         seed 非空时记录到 JSON 输出，便于复现。
+        entropy_info 非空时记录本次起卦的熵源来源（哪一层、种子指纹），便于事后核查。
         """
         # 1. 计算干支
         gz = LiuYaoPaipan.calc_ganzhi(year, month, day, hour, minute)
@@ -1539,6 +1570,7 @@ class LiuYaoPaipan:
                                        ben_you_hun, ben_gui_hun,
                                        bian_you_hun, bian_gui_hun),
             "seed": seed,
+            "entropy": entropy_info,
         }
 
         return result
@@ -1660,12 +1692,18 @@ def main():
         args.manual = True
 
     # 摇卦随机源：
-    #   --seed 指定 → 可复现的伪随机（"重看同一卦"用）
-    #   未指定     → 时间随机（纳秒时钟 × 操作系统物理熵），锁死在起卦此刻
+    #   --seed 指定 → 可复现伪随机（"重看同一卦"用，逐位等同 random.Random(seed)）
+    #   未指定     → 分层物理熵（RDSEED / 平台熵 / urandom / 抖动）→ HKDF → HMAC-DRBG
+    entropy_info = None
     if args.seed is not None and not args.yao:
         toss_rng = random.Random(args.seed)
     elif not args.yao:
         toss_rng = make_time_rng()
+        entropy_info = getattr(toss_rng, "provenance", None)
+        if entropy_info:
+            print(f"[熵源] {entropy_info['primary']} ← "
+                  f"{'+'.join(entropy_info['sources'])}  "
+                  f"seed:{entropy_info['seed_sha256']}", file=sys.stderr)
     else:
         toss_rng = None  # --yao 手动模式不摇卦
 
@@ -1732,7 +1770,7 @@ def main():
     try:
         data = LiuYaoPaipan.build_paipan_data(
             ygua, year, month, day, hour, minute, args.subject, args.intent,
-            seed=args.seed,
+            seed=args.seed, entropy_info=entropy_info,
         )
     except ValueError as e:
         msg = str(e)
