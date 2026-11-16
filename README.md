@@ -177,6 +177,8 @@ HTML 报告使用内联 CSS，无需外部依赖。报告内含 **「旺相休�
 
 规则编号检索见 [references/rule-index.md](./references/rule-index.md)。`TL-*` 表示 SKILL.md 铁律，`PR-*` 表示 `jie-gua-xiang-jie.md` 的 16 条核心原则。
 
+> 📖 **起卦熵源**的设计、三平台实现矩阵、实测数据与排障手册见 [`docs/entropy.md`](./docs/entropy.md)。自检命令：`python scripts/entropy.py --selftest`。
+
 ### 发布前检查清单
 
 在 Windows PowerShell 下运行中文输出相关命令时，先设置 UTF-8，避免 GBK 控制台把脚本误判为异常：
