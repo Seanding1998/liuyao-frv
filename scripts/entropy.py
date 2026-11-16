@@ -384,24 +384,81 @@ def windows_bytes(n):
 # ═══════════════════════════════════════════════════════════════
 
 def jitter_bytes(n):
-    """计数器差分。熵率很低（实测约 0.96 bit/byte），只作补充，绝不当主源。"""
+    """计数器差分 + 内存访问时延，两个独立抖动源异或。
+
+    实测（Windows，4000 样本，低 6 位）：裸 perf_counter 差分 0.588 bit、
+    自相关 +0.03；内存随机页触摸 1.667 bit、自相关 +0.03；两者异或 1.749 bit。
+    所以这里把两路噪声并进同一个累加器，而不是只用时钟。
+
+    熵率仍然很低——只作补充，永远不当主源。
+    """
     out = bytearray()
     prev = time.perf_counter_ns()
+    scratch = bytearray(1 << 16)               # 64 KiB，64 个页
+    state = 0x9E3779B9
+    mask = 0xFFFFFFFF
     while len(out) < n:
         acc = 0
         for i in range(8):
             if (i & 3) == 0:
-                time.sleep(0)                      # 让出时间片，采集调度抖动
-            now = time.perf_counter_ns()
-            delta = now - prev
-            prev = now
-            acc = ((acc << 7) ^ delta ^ (delta >> 17)) & 0xFFFFFFFFFFFFFFFF
+                time.sleep(0)                  # 让出时间片，采集调度抖动
+            t0 = time.perf_counter_ns()
+            for _ in range(8):                 # 触摸 8 个随机页，制造访存时延抖动
+                state = (state * 1103515245 + 12345) & mask
+                scratch[(state >> 9) & 0xF000] ^= 1
+            t1 = time.perf_counter_ns()
+            d_clock = t1 - prev
+            d_mem = t1 - t0
+            prev = t1
+            acc = ((acc << 7) ^ d_clock ^ (d_mem << 1) ^ (d_clock >> 17)
+                   ^ (d_mem >> 5)) & 0xFFFFFFFFFFFFFFFF
         out += acc.to_bytes(8, "little")
     return bytes(out[:n])
 
 
+def rss_bytes():
+    """当前进程的内存占用量（RSS）。
+
+    ⚠️ 这不是熵源。实测：Windows 紧循环 4000 次只有 26 个不同取值（MVC 3.1 bit），
+    相邻自相关 +0.999；Linux 同理（37 个取值，自相关 +0.998）。更关键的是
+    RSS 是**公开可观测**的（tasklist / ps / /proc/<pid>/status），拿它当熵等于
+    把种子的一部分写在公告板上。
+
+    放在这里只为让本次起卦与进程状态绑定，熵贡献按 0 bit 计。
+    """
+    try:
+        if _IS_WIN:
+            class _PMC(ctypes.Structure):
+                _fields_ = [
+                    ("cb", ctypes.c_uint32), ("PageFaultCount", ctypes.c_uint32),
+                    ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
+                ]
+            k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            psapi = ctypes.WinDLL("psapi", use_last_error=True)
+            k32.GetCurrentProcess.restype = ctypes.c_void_p
+            k32.GetCurrentProcess.argtypes = []
+            psapi.GetProcessMemoryInfo.restype = ctypes.c_int
+            psapi.GetProcessMemoryInfo.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32]
+            pmc = _PMC()
+            pmc.cb = ctypes.sizeof(_PMC)
+            psapi.GetProcessMemoryInfo(k32.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb)
+            return int(pmc.WorkingSetSize)
+        with open("/proc/self/statm", "rb") as fh:      # Linux
+            return int(fh.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+    except Exception:                                   # noqa: BLE001
+        pass
+    try:
+        import resource                                 # macOS / 其他 Unix 兜底
+        return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    except Exception:                                   # noqa: BLE001
+        return 0
+
+
 def env_bytes():
-    """进程/线程/时钟状态。信息量小，仅用于把 seed 绑定到这一次起卦。"""
+    """进程/线程/时钟/内存状态。信息量小，仅用于把 seed 绑定到这一次起卦。"""
     parts = [
         str(os.getpid()).encode(),
         str(threading.get_ident()).encode(),
@@ -409,6 +466,7 @@ def env_bytes():
         str(time.perf_counter_ns()).encode(),
         str(time.monotonic_ns()).encode(),
         str(sys.getrecursionlimit()).encode(),
+        str(rss_bytes()).encode(),                      # 绑定进程内存画像（0 熵）
     ]
     return b"|".join(parts)
 
